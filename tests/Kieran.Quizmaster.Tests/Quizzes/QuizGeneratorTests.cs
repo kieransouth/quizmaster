@@ -20,9 +20,26 @@ public class QuizGeneratorTests
         return (new QuizGenerator(factory, checker), client, checker);
     }
 
-    private static void StubChatResponse(IChatClient client, string json) =>
-        client.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
-              .Returns(new ChatResponse(new ChatMessage(ChatRole.Assistant, json)));
+    /// <summary>Build an IAsyncEnumerable&lt;ChatResponseUpdate&gt; from text chunks.</summary>
+    private static async IAsyncEnumerable<ChatResponseUpdate> AsStream(params string[] chunks)
+    {
+        foreach (var chunk in chunks)
+        {
+            yield return new ChatResponseUpdate(ChatRole.Assistant, chunk);
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>Make GetStreamingResponseAsync yield the given chunks (rebuilds per call).</summary>
+    private static void StubStream(IChatClient client, params string[] chunks) =>
+        client.GetStreamingResponseAsync(
+                Arg.Any<IEnumerable<ChatMessage>>(),
+                Arg.Any<ChatOptions?>(),
+                Arg.Any<CancellationToken>())
+              .Returns(_ => AsStream(chunks));
+
+    /// <summary>Convenience: stub with a single chunk containing a complete JSON document.</summary>
+    private static void StubFullJson(IChatClient client, string json) => StubStream(client, json);
 
     private static GenerateQuizRequest StarWars(int count = 2, bool factCheck = false) => new(
         Title: "Star Wars night",
@@ -43,7 +60,7 @@ public class QuizGeneratorTests
     public async Task Happy_path_emits_status_questions_then_done()
     {
         var (sut, client, _) = Build();
-        StubChatResponse(client, """
+        StubFullJson(client, """
         {
           "questions": [
             { "topic": "Star Wars", "text": "Who is Luke's father?", "type": "FreeText", "correctAnswer": "Darth Vader", "options": null, "explanation": null },
@@ -59,6 +76,24 @@ public class QuizGeneratorTests
         events.OfType<GenerationEvent.Question>().Count().ShouldBe(2);
         events.OfType<GenerationEvent.Question>().Select(q => q.Item.Order).ShouldBe([0, 1]);
         events.Last().ShouldBeOfType<GenerationEvent.Done>();
+    }
+
+    [Fact]
+    public async Task Streams_questions_progressively_as_chunks_arrive()
+    {
+        // Split the JSON across multiple chunks at arbitrary points to prove
+        // the parser handles incremental token boundaries correctly.
+        var (sut, client, _) = Build();
+        StubStream(client,
+            "{\"questions\":[{\"topic\":\"Star Wars\",\"text\":\"Q1\",\"type\":",
+            "\"FreeText\",\"correctAnswer\":\"A1\",\"options\":null,\"explanation\":null}",
+            ",{\"topic\":\"Star Wars\",\"text\":\"Q2\",\"type\":\"FreeText\",",
+            "\"correctAnswer\":\"A2\",\"options\":null,\"explanation\":null}]}");
+
+        var events = await Drain(sut.GenerateAsync(StarWars(2), default));
+
+        events.OfType<GenerationEvent.Question>().Count().ShouldBe(2);
+        events.OfType<GenerationEvent.Question>().Select(q => q.Item.Text).ShouldBe(["Q1", "Q2"]);
     }
 
     [Fact]
@@ -92,19 +127,16 @@ public class QuizGeneratorTests
     }
 
     [Fact]
-    public async Task Bad_JSON_eventually_yields_retryable_error_after_one_retry()
+    public async Task Garbage_stream_with_no_questions_yields_retryable_error()
     {
         var (sut, client, _) = Build();
-        // Both attempts return garbage.
-        StubChatResponse(client, "this is not json at all");
+        StubStream(client, "this is not json at all");
 
         var events = await Drain(sut.GenerateAsync(StarWars(), default));
 
         var err = events.Last().ShouldBeOfType<GenerationEvent.Error>();
         err.Retryable.ShouldBeTrue();
-        // We made the call twice (one + one retry).
-        await client.Received(2).GetResponseAsync(
-            Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>());
+        err.Message.ShouldContain("no questions");
     }
 
     [Fact]
@@ -112,7 +144,7 @@ public class QuizGeneratorTests
     {
         var (sut, client, _) = Build();
         // Asked for 3 Star Wars, model returns 1.
-        StubChatResponse(client, """
+        StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
         var req = StarWars(3);
@@ -129,7 +161,7 @@ public class QuizGeneratorTests
     public async Task Fact_check_off_does_not_call_checker()
     {
         var (sut, client, checker) = Build();
-        StubChatResponse(client, """
+        StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
 
@@ -140,10 +172,10 @@ public class QuizGeneratorTests
     }
 
     [Fact]
-    public async Task Fact_check_on_invokes_checker_and_uses_its_result()
+    public async Task Fact_check_on_re_emits_flagged_question()
     {
         var (sut, client, checker) = Build();
-        StubChatResponse(client, """
+        StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
         // Checker says "this question is wrong, here's why".
@@ -159,16 +191,24 @@ public class QuizGeneratorTests
 
         events.OfType<GenerationEvent.Status>().Select(s => s.Stage)
               .ShouldContain("fact-checking");
-        var question = events.OfType<GenerationEvent.Question>().Single().Item;
-        question.FactCheckFlagged.ShouldBeTrue();
-        question.FactCheckNote.ShouldBe("wrong actually");
+
+        // Two question events: one streamed live (unflagged) + one re-emit after fact-check (flagged).
+        var questionEvents = events.OfType<GenerationEvent.Question>().Select(q => q.Item).ToList();
+        questionEvents.Count.ShouldBe(2);
+        questionEvents[0].FactCheckFlagged.ShouldBeFalse();
+        questionEvents[1].FactCheckFlagged.ShouldBeTrue();
+        questionEvents[1].FactCheckNote.ShouldBe("wrong actually");
+
+        // Done event reflects the final (flagged) state.
+        var done = events.OfType<GenerationEvent.Done>().Single();
+        done.Quiz.Questions[0].FactCheckFlagged.ShouldBeTrue();
     }
 
     [Fact]
     public async Task Done_event_carries_full_draft_with_questions()
     {
         var (sut, client, _) = Build();
-        StubChatResponse(client, """
+        StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
 
@@ -187,13 +227,12 @@ public class QuizGeneratorTests
     public async Task Json_wrapped_in_markdown_is_extracted()
     {
         var (sut, client, _) = Build();
-        // Some models stubbornly wrap JSON despite instructions.
-        StubChatResponse(client, """
-        Sure, here you go:
-        ```json
-        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
-        ```
-        """);
+        // Some models stubbornly wrap JSON despite instructions. The streaming
+        // parser ignores everything before the first '['.
+        StubStream(client,
+            """Sure, here you go:""", "\n```json\n",
+            """{"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}""",
+            "\n```");
 
         var events = await Drain(sut.GenerateAsync(StarWars(1), default));
 

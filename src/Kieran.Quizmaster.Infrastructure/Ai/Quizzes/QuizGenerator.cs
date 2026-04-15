@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Kieran.Quizmaster.Application.Ai;
 using Kieran.Quizmaster.Application.Quizzes;
 using Kieran.Quizmaster.Application.Quizzes.Dtos;
@@ -12,11 +11,6 @@ public sealed class QuizGenerator(
     IAiChatClientFactory factory,
     IFactChecker         factChecker) : IQuizGenerator
 {
-    private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web)
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     public async IAsyncEnumerable<GenerationEvent> GenerateAsync(
         GenerateQuizRequest request,
         [EnumeratorCancellation] CancellationToken ct)
@@ -42,32 +36,42 @@ public sealed class QuizGenerator(
 
         var prompt = Prompts.Generation(request.Topics, request.MultipleChoiceFraction);
 
-        var (raw, parseError) = await CallAndParseAsync(client, prompt, ct);
-        if (raw is null)
+        // Stream the model output and emit each question as it completes,
+        // so the user sees them appear progressively rather than all at once
+        // after a long wait.
+        var collected = new List<DraftQuestion>();
+        await foreach (var evt in StreamQuestionsAsync(client, prompt, ct))
+        {
+            if (evt is GenerationEvent.Question q)
+            {
+                collected.Add(q.Item);
+            }
+            yield return evt;
+            if (evt is GenerationEvent.Error) yield break;
+        }
+
+        if (collected.Count == 0)
         {
             yield return new GenerationEvent.Error(
-                parseError ?? "Generation failed.", Retryable: true);
+                "Generation produced no questions.", Retryable: true);
             yield break;
         }
 
-        var draftQuestions = raw.Questions
-            .Select((q, i) => ToDraft(q, i))
-            .ToList();
-
-        // Fact-check synchronously before we emit so questions arrive with
-        // their final flags.
-        if (request.RunFactCheck && draftQuestions.Count > 0)
+        // Optional fact-check. Re-emit each affected question with its new
+        // flagged state — frontend dedupes question events by Order.
+        if (request.RunFactCheck)
         {
             yield return new GenerationEvent.Status("fact-checking");
-            string? factCheckError = null;
+            string?               factCheckError = null;
+            List<DraftQuestion>?  updated        = null;
             try
             {
                 var checkedDraft = await factChecker.CheckAsync(
                     new DraftQuiz(
                         request.Title, "Generated", request.Provider, request.Model,
-                        request.Topics, SourceText: null, draftQuestions),
+                        request.Topics, SourceText: null, collected),
                     providerKind, request.Model, ct);
-                draftQuestions = [.. checkedDraft.Questions];
+                updated = [.. checkedDraft.Questions];
             }
             catch (Exception ex) { factCheckError = ex.Message; }
 
@@ -76,17 +80,18 @@ public sealed class QuizGenerator(
                 yield return new GenerationEvent.Warning(
                     $"Fact-check skipped due to error: {factCheckError}");
             }
-        }
-
-        yield return new GenerationEvent.Status("finalising");
-
-        foreach (var dq in draftQuestions)
-        {
-            yield return new GenerationEvent.Question(dq);
+            else if (updated is not null)
+            {
+                collected = updated;
+                foreach (var q in collected.Where(q => q.FactCheckFlagged))
+                {
+                    yield return new GenerationEvent.Question(q);
+                }
+            }
         }
 
         // Partial-count warnings (e.g. asked for 5 on The Office, got 3).
-        var byTopic = draftQuestions
+        var byTopic = collected
             .GroupBy(q => q.Topic, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
         foreach (var t in request.Topics)
@@ -101,65 +106,71 @@ public sealed class QuizGenerator(
 
         var draft = new DraftQuiz(
             request.Title, "Generated", request.Provider, request.Model,
-            request.Topics, SourceText: null, draftQuestions);
+            request.Topics, SourceText: null, collected);
 
         yield return new GenerationEvent.Done(draft);
     }
 
     /// <summary>
-    /// Calls the model and parses the JSON. On parse failure, retries once.
+    /// Streams from <see cref="IChatClient.GetStreamingResponseAsync"/> and
+    /// emits per-question events as soon as their JSON object is complete.
     /// </summary>
-    internal static async Task<(RawQuizResponse? Raw, string? Error)> CallAndParseAsync(
-        IChatClient client, string prompt, CancellationToken ct)
+    internal static async IAsyncEnumerable<GenerationEvent> StreamQuestionsAsync(
+        IChatClient client,
+        string prompt,
+        [EnumeratorCancellation] CancellationToken ct)
     {
-        string? lastError = null;
-        for (var attempt = 0; attempt < 2; attempt++)
+        IAsyncEnumerable<ChatResponseUpdate>? stream = null;
+        string? streamError = null;
+        try
         {
-            ChatResponse response;
-            try
-            {
-                response = await client.GetResponseAsync(
-                    [new ChatMessage(ChatRole.User, prompt)],
-                    new ChatOptions { ResponseFormat = ChatResponseFormat.Json },
-                    ct);
-            }
-            catch (Exception ex)
-            {
-                lastError = $"AI provider call failed: {ex.Message}";
-                continue;
-            }
+            stream = client.GetStreamingResponseAsync(
+                [new ChatMessage(ChatRole.User, prompt)],
+                new ChatOptions { ResponseFormat = ChatResponseFormat.Json },
+                ct);
+        }
+        catch (Exception ex) { streamError = $"AI provider call failed: {ex.Message}"; }
 
-            var text = ExtractJson(response.Text);
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                lastError = "AI returned empty response.";
-                continue;
-            }
+        if (streamError is not null || stream is null)
+        {
+            yield return new GenerationEvent.Error(streamError ?? "Failed to start stream.", Retryable: true);
+            yield break;
+        }
 
-            try
+        var parser = new StreamingQuestionParser();
+        var order  = 0;
+        string? iterationError = null;
+
+        var enumerator = stream.GetAsyncEnumerator(ct);
+        try
+        {
+            while (true)
             {
-                var parsed = JsonSerializer.Deserialize<RawQuizResponse>(text, JsonOpts);
-                if (parsed is { Questions: not null }) return (parsed, null);
-                lastError = "AI response missing 'questions' array.";
-            }
-            catch (Exception ex)
-            {
-                lastError = $"Failed to parse AI response as JSON: {ex.Message}";
+                bool moved;
+                try { moved = await enumerator.MoveNextAsync(); }
+                catch (Exception ex) { iterationError = $"AI stream failed: {ex.Message}"; break; }
+
+                if (!moved) break;
+
+                var update = enumerator.Current;
+                var text = update.Text;
+                if (string.IsNullOrEmpty(text)) continue;
+
+                foreach (var raw in parser.Append(text))
+                {
+                    yield return new GenerationEvent.Question(ToDraft(raw, order++));
+                }
             }
         }
-        return (null, lastError);
-    }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
 
-    /// <summary>
-    /// Defensive: some models wrap JSON in ```json ... ``` despite the prompt.
-    /// Slice from the first '{' to the last '}' to give parsing a fair shot.
-    /// </summary>
-    private static string ExtractJson(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return text;
-        var start = text.IndexOf('{');
-        var end   = text.LastIndexOf('}');
-        return (start >= 0 && end > start) ? text[start..(end + 1)] : text;
+        if (iterationError is not null)
+        {
+            yield return new GenerationEvent.Error(iterationError, Retryable: true);
+        }
     }
 
     internal static DraftQuestion ToDraft(RawQuestion raw, int order) => new(

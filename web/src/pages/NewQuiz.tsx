@@ -47,13 +47,15 @@ export default function NewQuiz() {
     () => [...stream.events].reverse().find((e) => e.type === "status")?.stage,
     [stream.events],
   );
-  const questions = useMemo(
-    () =>
-      stream.events
-        .filter((e): e is { type: "question"; item: DraftQuestion } => e.type === "question")
-        .map((e) => e.item),
-    [stream.events],
-  );
+  // Dedupe by order — fact-check re-emits questions with updated flags,
+  // and we want the latest version per slot.
+  const questions = useMemo(() => {
+    const byOrder = new Map<number, DraftQuestion>();
+    for (const e of stream.events) {
+      if (e.type === "question") byOrder.set(e.item.order, e.item);
+    }
+    return [...byOrder.values()].sort((a, b) => a.order - b.order);
+  }, [stream.events]);
   const warnings = useMemo(
     () => stream.events.filter((e): e is { type: "warning"; message: string } => e.type === "warning"),
     [stream.events],

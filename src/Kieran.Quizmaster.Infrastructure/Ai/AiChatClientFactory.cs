@@ -4,6 +4,7 @@ using Kieran.Quizmaster.Domain.Enumerations;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
+using OpenAI;
 
 namespace Kieran.Quizmaster.Infrastructure.Ai;
 
@@ -28,12 +29,22 @@ public sealed class AiChatClientFactory(IOptions<AiOptions> options) : IAiChatCl
         return provider.Value switch
         {
             1 /* Ollama */    => CreateOllama(cfg, model),
-            2 /* OpenAI */    => throw new NotImplementedException(
-                "OpenAI adapter not yet wired (planned for Phase 5)."),
+            2 /* OpenAI */    => CreateOpenAI(cfg, model),
             3 /* Anthropic */ => throw new NotImplementedException(
-                "Anthropic adapter not yet wired (planned for Phase 5)."),
+                "Anthropic adapter not yet wired."),
             _ => throw new InvalidOperationException($"Unknown provider value: {provider.Value}")
         };
+    }
+
+    private static IChatClient CreateOpenAI(AiProviderConfig cfg, string model)
+    {
+        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
+            throw new InvalidOperationException(
+                "OpenAI provider requires an API key. Set Ai__Providers__OpenAI__ApiKey.");
+
+        return new OpenAIClient(cfg.ApiKey)
+            .GetChatClient(model)
+            .AsIChatClient();
     }
 
     public AiProvidersResponse GetAvailableProviders()

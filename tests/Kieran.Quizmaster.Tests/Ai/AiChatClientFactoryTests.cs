@@ -66,14 +66,32 @@ public class AiChatClientFactoryTests
     }
 
     [Fact]
-    public void Create_throws_NotImplemented_for_OpenAI_until_phase_5()
+    public void Create_for_OpenAI_throws_when_no_api_key()
     {
+        // DefaultOpts has OpenAI in the providers list but with no ApiKey.
         var sut = Build(DefaultOpts());
 
-        var ex = Should.Throw<NotImplementedException>(
+        var ex = Should.Throw<InvalidOperationException>(
             () => sut.Create(AiProviderKind.OpenAI, "gpt-5"));
 
         ex.Message.ShouldContain("OpenAI");
+        ex.Message.ShouldContain("API key");
+    }
+
+    [Fact]
+    public void Create_for_OpenAI_returns_chat_client_when_key_provided()
+    {
+        var opts = DefaultOpts();
+        opts.Providers["OpenAI"] = new AiProviderConfig
+        {
+            ApiKey = "sk-test-not-real",
+            Models = ["gpt-5"],
+        };
+        var sut = Build(opts);
+
+        var client = sut.Create(AiProviderKind.OpenAI, "gpt-5");
+
+        client.ShouldBeAssignableTo<IChatClient>();
     }
 
     [Fact]

@@ -34,35 +34,34 @@ public sealed class QuizImporter(
             yield break;
         }
 
-        var prompt = Prompts.Import(request.SourceText);
-        var (raw, error) = await QuizGenerator.CallAndParseAsync(client, prompt, ct);
-        if (raw is null)
+        var prompt    = Prompts.Import(request.SourceText);
+        var collected = new List<DraftQuestion>();
+
+        await foreach (var evt in QuizGenerator.StreamQuestionsAsync(client, prompt, ct))
         {
-            yield return new GenerationEvent.Error(error ?? "Import failed.", Retryable: true);
-            yield break;
+            if (evt is GenerationEvent.Question q) collected.Add(q.Item);
+            yield return evt;
+            if (evt is GenerationEvent.Error) yield break;
         }
 
-        var draftQuestions = raw.Questions
-            .Select((q, i) => QuizGenerator.ToDraft(q, i))
-            .ToList();
-
-        if (draftQuestions.Count == 0)
+        if (collected.Count == 0)
         {
             yield return new GenerationEvent.Warning("No questions extracted from the source text.");
         }
 
-        if (request.RunFactCheck && draftQuestions.Count > 0)
+        if (request.RunFactCheck && collected.Count > 0)
         {
             yield return new GenerationEvent.Status("fact-checking");
-            string? factCheckError = null;
+            string?              factCheckError = null;
+            List<DraftQuestion>? updated        = null;
             try
             {
                 var checkedDraft = await factChecker.CheckAsync(
                     new DraftQuiz(
                         request.Title, "Imported", request.Provider, request.Model,
-                        Topics: [], request.SourceText, draftQuestions),
+                        Topics: [], request.SourceText, collected),
                     providerKind, request.Model, ct);
-                draftQuestions = [.. checkedDraft.Questions];
+                updated = [.. checkedDraft.Questions];
             }
             catch (Exception ex) { factCheckError = ex.Message; }
 
@@ -71,18 +70,19 @@ public sealed class QuizImporter(
                 yield return new GenerationEvent.Warning(
                     $"Fact-check skipped due to error: {factCheckError}");
             }
-        }
-
-        yield return new GenerationEvent.Status("finalising");
-
-        foreach (var dq in draftQuestions)
-        {
-            yield return new GenerationEvent.Question(dq);
+            else if (updated is not null)
+            {
+                collected = updated;
+                foreach (var q in collected.Where(q => q.FactCheckFlagged))
+                {
+                    yield return new GenerationEvent.Question(q);
+                }
+            }
         }
 
         var draft = new DraftQuiz(
             request.Title, "Imported", request.Provider, request.Model,
-            Topics: [], request.SourceText, draftQuestions);
+            Topics: [], request.SourceText, collected);
 
         yield return new GenerationEvent.Done(draft);
     }
