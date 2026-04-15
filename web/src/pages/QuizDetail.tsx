@@ -53,10 +53,13 @@ export default function QuizDetail() {
 
   const dirty = useMemo(() => {
     if (typeof quiz !== "object" || quiz === null) return false;
-    if (title !== loaded.title) return true;
-    if (questions.length !== loaded.questions.length) return true;
+    // `quiz` is narrowed to QuizDetailDto here — `loaded` is declared
+    // later in the function body (after early returns) so we use the
+    // narrowed `quiz` directly inside this memo.
+    if (title !== quiz.title) return true;
+    if (questions.length !== quiz.questions.length) return true;
     return questions.some((q, i) => {
-      const orig = loaded.questions[i];
+      const orig = quiz.questions[i];
       if (!orig || orig.id !== q.id) return true;
       return (
         q.text !== orig.text ||
