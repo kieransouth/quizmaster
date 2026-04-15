@@ -1,5 +1,7 @@
+using Kieran.Quizmaster.Application.Ai;
 using Kieran.Quizmaster.Application.Auth;
 using Kieran.Quizmaster.Domain.Entities;
+using Kieran.Quizmaster.Infrastructure.Ai;
 using Kieran.Quizmaster.Infrastructure.Auth;
 using Kieran.Quizmaster.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -52,6 +54,13 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();
+
+        // AI services
+        services.AddOptions<AiOptions>()
+            .Bind(configuration.GetSection(AiOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<IAiChatClientFactory, AiChatClientFactory>();
 
         return services;
     }
