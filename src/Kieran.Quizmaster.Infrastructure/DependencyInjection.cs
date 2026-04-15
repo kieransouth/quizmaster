@@ -1,4 +1,6 @@
+using Kieran.Quizmaster.Application.Auth;
 using Kieran.Quizmaster.Domain.Entities;
+using Kieran.Quizmaster.Infrastructure.Auth;
 using Kieran.Quizmaster.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,8 +12,9 @@ namespace Kieran.Quizmaster.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Wires up Infrastructure services: EF Core (Postgres) and ASP.NET Core
-    /// Identity with Guid keys. Call once from Program.cs.
+    /// Wires up Infrastructure services: EF Core (Postgres), ASP.NET Core
+    /// Identity (Guid keys), and the JWT / refresh-token services. Call once
+    /// from Program.cs.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
@@ -25,15 +28,30 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString));
 
         // IdentityCore = no cookies / no UI / no token providers we don't use.
-        // Phase 3 layers JWT auth on top via Microsoft.AspNetCore.Authentication.JwtBearer.
+        // JWT bearer auth (Phase 3) is layered on top by the API project.
         services
             .AddIdentityCore<User>(options =>
             {
-                options.Password.RequiredLength = 8;
-                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength         = 8;
+                options.Password.RequireDigit           = false;
+                options.Password.RequireUppercase       = false;
+                options.Password.RequireLowercase       = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.User.RequireUniqueEmail         = true;
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<ApplicationDbContext>();
+
+        // Auth services
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.SigningKey) && o.SigningKey.Length >= 32,
+                      "Jwt:SigningKey must be at least 32 characters.")
+            .ValidateOnStart();
+
+        services.AddSingleton(TimeProvider.System);
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
         return services;
     }
