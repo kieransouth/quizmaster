@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/*
+ * Theme tokens via CSS custom properties.
+ *
+ * Adding a new theme = add a new [data-theme="..."] block.
+ * No component classes need to change — they reference these vars
+ * via Tailwind utilities (bg-bg, text-fg, bg-surface, etc.) thanks
+ * to the @theme block below.
+ */
+
+@theme {
+  --color-bg: var(--qm-bg);
+  --color-surface: var(--qm-surface);
+  --color-surface-muted: var(--qm-surface-muted);
+  --color-fg: var(--qm-fg);
+  --color-fg-muted: var(--qm-fg-muted);
+  --color-accent: var(--qm-accent);
+  --color-accent-fg: var(--qm-accent-fg);
+  --color-border: var(--qm-border);
+}
+
+:root,
+:root[data-theme="light"] {
+  --qm-bg: oklch(98% 0.01 250);
+  --qm-surface: oklch(100% 0 0);
+  --qm-surface-muted: oklch(96% 0.01 250);
+  --qm-fg: oklch(20% 0.02 250);
+  --qm-fg-muted: oklch(45% 0.02 250);
+  --qm-accent: oklch(60% 0.18 270);
+  --qm-accent-fg: oklch(100% 0 0);
+  --qm-border: oklch(90% 0.01 250);
+}
+
+:root[data-theme="dark"] {
+  --qm-bg: oklch(18% 0.02 250);
+  --qm-surface: oklch(22% 0.02 250);
+  --qm-surface-muted: oklch(26% 0.02 250);
+  --qm-fg: oklch(95% 0.01 250);
+  --qm-fg-muted: oklch(70% 0.02 250);
+  --qm-accent: oklch(70% 0.18 270);
+  --qm-accent-fg: oklch(15% 0.02 270);
+  --qm-border: oklch(30% 0.02 250);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --qm-bg: oklch(18% 0.02 250);
+    --qm-surface: oklch(22% 0.02 250);
+    --qm-surface-muted: oklch(26% 0.02 250);
+    --qm-fg: oklch(95% 0.01 250);
+    --qm-fg-muted: oklch(70% 0.02 250);
+    --qm-accent: oklch(70% 0.18 270);
+    --qm-accent-fg: oklch(15% 0.02 270);
+    --qm-border: oklch(30% 0.02 250);
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-fg);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}

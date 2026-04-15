@@ -1,0 +1,105 @@
+# Quizmaster — local self-hosted stack.
+#
+# Public surface is fronted by Traefik (assumed already running on the
+# external `web` network). Postgres + Ollama stay on the internal network.
+#
+# IMPORTANT — fill these in before bringing the stack up:
+#   * Traefik certificate resolver labels (`traefik.http.routers.*.tls.certresolver`)
+#     are intentionally omitted. Add the resolver name your Traefik instance
+#     advertises, e.g.:
+#         - "traefik.http.routers.quizmaster-api.tls.certresolver=letsencrypt"
+#   * Populate `.env` from `.env.example`.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: quizmaster-api
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - ollama
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      Jwt__SigningKey: "${JWT_SIGNING_KEY}"
+      Jwt__Issuer: "quizmaster"
+      Jwt__Audience: "quizmaster"
+      Ai__DefaultProvider: "Ollama"
+      Ai__DefaultModel: "${OLLAMA_DEFAULT_MODEL}"
+      Ai__Providers__Ollama__BaseUrl: "http://ollama:11434"
+      Ai__Providers__OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
+      Ai__Providers__Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
+    networks:
+      - web
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.quizmaster-api.rule=Host(`quizmaster.spicy.gg`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.quizmaster-api.entrypoints=websecure"
+      - "traefik.http.routers.quizmaster-api.tls=true"
+      - "traefik.http.middlewares.quizmaster-api-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.quizmaster-api.middlewares=quizmaster-api-strip"
+      - "traefik.http.services.quizmaster-api.loadbalancer.server.port=8080"
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: quizmaster-web
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.quizmaster-web.rule=Host(`quizmaster.spicy.gg`)"
+      - "traefik.http.routers.quizmaster-web.entrypoints=websecure"
+      - "traefik.http.routers.quizmaster-web.tls=true"
+      - "traefik.http.services.quizmaster-web.loadbalancer.server.port=80"
+      # api router has a more specific rule (Host && PathPrefix), so Traefik
+      # will route /api/* to the API automatically — no priority hack needed.
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: quizmaster-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: quizmaster-ollama
+    restart: unless-stopped
+    environment:
+      # Authenticates the local Ollama daemon to Ollama Cloud so cloud-hosted
+      # models (qwen2.5:72b, kimi-k2, etc.) are reachable through the local
+      # http://ollama:11434 endpoint.
+      OLLAMA_API_KEY: "${OLLAMA_CLOUD_API_KEY}"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - internal
+
+networks:
+  web:
+    external: true
+  internal:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  ollama-data:
