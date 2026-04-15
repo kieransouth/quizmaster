@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { useBootstrap } from "./auth/useBootstrap";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import NewQuiz from "./pages/NewQuiz";
 import Register from "./pages/Register";
 
 export default function App() {
@@ -19,6 +20,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Home />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/quizzes/new"
+          element={
+            <ProtectedRoute>
+              <NewQuiz />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useProviders } from "../ai/useProviders";
 import { apiFetch } from "../api/client";
 import { useAuthStore } from "../auth/store";
@@ -51,11 +51,20 @@ export default function Home() {
 
       <main className="mx-auto max-w-6xl space-y-6 px-6 py-16">
         <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
-          <h2 className="text-2xl font-semibold">You're signed in.</h2>
-          <p className="mt-2 text-fg-muted">
-            Phase 4 complete — AI providers are wired. Phase 5 will start
-            generating quizzes.
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-semibold">You're signed in.</h2>
+              <p className="mt-2 text-fg-muted">
+                Phase 5 ships — generate or import a quiz.
+              </p>
+            </div>
+            <Link
+              to="/quizzes/new"
+              className="rounded-md bg-accent px-4 py-2 font-medium text-accent-fg"
+            >
+              New quiz
+            </Link>
+          </div>
 
           <div className="mt-6 rounded-lg bg-surface-muted p-4 font-mono text-sm">
             <div className="text-fg-muted">GET /api/health</div>
