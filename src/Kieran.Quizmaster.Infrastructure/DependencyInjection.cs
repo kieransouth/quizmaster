@@ -1,12 +1,14 @@
 using Kieran.Quizmaster.Application.Ai;
 using Kieran.Quizmaster.Application.Auth;
 using Kieran.Quizmaster.Application.Quizzes;
+using Kieran.Quizmaster.Application.Sessions;
 using Kieran.Quizmaster.Domain.Entities;
 using Kieran.Quizmaster.Infrastructure.Ai;
 using Kieran.Quizmaster.Infrastructure.Ai.Quizzes;
 using Kieran.Quizmaster.Infrastructure.Auth;
 using Kieran.Quizmaster.Infrastructure.Persistence;
 using Kieran.Quizmaster.Infrastructure.Quizzes;
+using Kieran.Quizmaster.Infrastructure.Sessions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -73,6 +75,9 @@ public static class DependencyInjection
         // Quiz persistence + edit (Phase 6)
         services.AddScoped<IQuizService,             QuizService>();
         services.AddScoped<IQuizQuestionRegenerator, QuizQuestionRegenerator>();
+
+        // Play sessions (Phase 7)
+        services.AddScoped<ISessionService, SessionService>();
 
         return services;
     }

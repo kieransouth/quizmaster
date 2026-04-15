@@ -18,6 +18,9 @@ export default function NewQuiz() {
   const stream = useGenerationStream();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Hide answers by default so the host can play along with the team
+  // without spoiling themselves while reviewing the generated quiz.
+  const [showAnswers, setShowAnswers] = useState(false);
 
   const [mode, setMode] = useState<Mode>("generate");
   const [title, setTitle] = useState("");
@@ -280,8 +283,25 @@ export default function NewQuiz() {
             </div>
           )}
 
+          {questions.length > 0 && (
+            <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-2 text-sm">
+              <span className="text-fg-muted">
+                {showAnswers
+                  ? "Answers visible — for review."
+                  : "Answers hidden so you can play along."}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAnswers((v) => !v)}
+                className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg-muted hover:text-fg"
+              >
+                {showAnswers ? "Hide answers" : "Show answers"}
+              </button>
+            </div>
+          )}
+
           {questions.map((q, i) => (
-            <QuestionCard key={i} index={i} q={q} />
+            <QuestionCard key={i} index={i} q={q} showAnswers={showAnswers} />
           ))}
 
           {doneEvent && doneEvent.type === "done" && (
@@ -450,7 +470,15 @@ function McMixSlider({
   );
 }
 
-function QuestionCard({ index, q }: { index: number; q: DraftQuestion }) {
+function QuestionCard({
+  index,
+  q,
+  showAnswers,
+}: {
+  index: number;
+  q: DraftQuestion;
+  showAnswers: boolean;
+}) {
   return (
     <div
       className={
@@ -478,11 +506,13 @@ function QuestionCard({ index, q }: { index: number; q: DraftQuestion }) {
               key={i}
               className={
                 "rounded px-2 py-1 " +
-                (o === q.correctAnswer ? "bg-accent/20 text-fg" : "text-fg-muted")
+                (showAnswers && o === q.correctAnswer
+                  ? "bg-accent/20 text-fg"
+                  : "text-fg-muted")
               }
             >
               {o}
-              {o === q.correctAnswer && " ✓"}
+              {showAnswers && o === q.correctAnswer && " ✓"}
             </li>
           ))}
         </ul>
@@ -491,11 +521,15 @@ function QuestionCard({ index, q }: { index: number; q: DraftQuestion }) {
       {q.type === "FreeText" && (
         <p className="mt-2 text-sm">
           <span className="text-fg-muted">Answer: </span>
-          <span className="font-mono text-accent">{q.correctAnswer}</span>
+          {showAnswers ? (
+            <span className="font-mono text-accent">{q.correctAnswer}</span>
+          ) : (
+            <span className="font-mono text-fg-muted/60 select-none">••••••••</span>
+          )}
         </p>
       )}
 
-      {q.explanation && (
+      {showAnswers && q.explanation && (
         <p className="mt-2 text-xs text-fg-muted italic">{q.explanation}</p>
       )}
       {q.factCheckNote && (
