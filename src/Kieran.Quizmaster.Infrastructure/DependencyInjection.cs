@@ -6,6 +6,7 @@ using Kieran.Quizmaster.Infrastructure.Ai;
 using Kieran.Quizmaster.Infrastructure.Ai.Quizzes;
 using Kieran.Quizmaster.Infrastructure.Auth;
 using Kieran.Quizmaster.Infrastructure.Persistence;
+using Kieran.Quizmaster.Infrastructure.Quizzes;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -68,6 +69,10 @@ public static class DependencyInjection
         services.AddScoped<IFactChecker,    FactChecker>();
         services.AddScoped<IQuizGenerator,  QuizGenerator>();
         services.AddScoped<IQuizImporter,   QuizImporter>();
+
+        // Quiz persistence + edit (Phase 6)
+        services.AddScoped<IQuizService,             QuizService>();
+        services.AddScoped<IQuizQuestionRegenerator, QuizQuestionRegenerator>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useProviders } from "../ai/useProviders";
+import { saveQuiz } from "../quizzes/api";
 import { useGenerationStream } from "../quizzes/useGenerationStream";
 import type {
   DraftQuestion,
@@ -12,8 +13,11 @@ import type {
 type Mode = "generate" | "import";
 
 export default function NewQuiz() {
+  const navigate = useNavigate();
   const providers = useProviders();
   const stream = useGenerationStream();
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("generate");
   const [title, setTitle] = useState("");
@@ -287,8 +291,31 @@ export default function NewQuiz() {
                 {doneEvent.quiz.questions.length === 1 ? "" : "s"}.
               </p>
               <p className="mt-1 text-sm text-fg-muted">
-                Phase 6 will save this draft and let you review/edit before play.
+                Save it to the question bank — you can edit and play it
+                from there.
               </p>
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={async () => {
+                    setSaving(true);
+                    setSaveError(null);
+                    try {
+                      const { id } = await saveQuiz(doneEvent.quiz);
+                      navigate(`/quizzes/${id}`);
+                    } catch (e) {
+                      setSaveError(e instanceof Error ? e.message : "Save failed");
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  className="rounded-md bg-accent px-4 py-2 font-medium text-accent-fg disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save quiz"}
+                </button>
+                {saveError && <span className="text-sm text-red-500">{saveError}</span>}
+              </div>
             </div>
           )}
         </section>
