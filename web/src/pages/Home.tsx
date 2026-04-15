@@ -1,28 +1,26 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useProviders } from "../ai/useProviders";
-import { apiFetch } from "../api/client";
 import { useAuthStore } from "../auth/store";
+import { listMyQuizzes, type QuizSummaryDto } from "../quizzes/api";
 import { applyTheme, getStoredTheme, type Theme } from "../theme";
-
-type Health = { status: string; version: string };
 
 export default function Home() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const [theme, setTheme] = useState<Theme>(getStoredTheme());
-  const [health, setHealth] = useState<Health | "loading" | "error">("loading");
+  const [quizzes, setQuizzes] = useState<QuizSummaryDto[] | "loading" | "error">("loading");
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
   useEffect(() => {
-    apiFetch("/api/health")
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((data: Health) => setHealth(data))
-      .catch(() => setHealth("error"));
+    let cancelled = false;
+    listMyQuizzes()
+      .then((data) => { if (!cancelled) setQuizzes(data); })
+      .catch(() => { if (!cancelled) setQuizzes("error"); });
+    return () => { cancelled = true; };
   }, []);
 
   async function onLogout() {
@@ -49,84 +47,63 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-6 px-6 py-16">
-        <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-2xl font-semibold">You're signed in.</h2>
-              <p className="mt-2 text-fg-muted">
-                Phase 5 ships — generate or import a quiz.
-              </p>
-            </div>
-            <Link
-              to="/quizzes/new"
-              className="rounded-md bg-accent px-4 py-2 font-medium text-accent-fg"
-            >
-              New quiz
-            </Link>
+      <main className="mx-auto max-w-6xl space-y-6 px-6 py-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold">Your quizzes</h2>
+            <p className="mt-1 text-sm text-fg-muted">
+              Saved drafts. Pick one to edit, or generate a new one.
+            </p>
           </div>
-
-          <div className="mt-6 rounded-lg bg-surface-muted p-4 font-mono text-sm">
-            <div className="text-fg-muted">GET /api/health</div>
-            <div className="mt-2">
-              {health === "loading" && "loading…"}
-              {health === "error" && <span className="text-red-500">unreachable</span>}
-              {typeof health === "object" && (
-                <>
-                  status: <span className="text-accent">{health.status}</span>
-                  <br />
-                  version: <span className="text-accent">{health.version}</span>
-                </>
-              )}
-            </div>
-          </div>
+          <Link
+            to="/quizzes/new"
+            className="rounded-md bg-accent px-4 py-2 font-medium text-accent-fg"
+          >
+            New quiz
+          </Link>
         </div>
 
-        <ProvidersPanel />
+        {quizzes === "loading" && (
+          <div className="rounded-md border border-border bg-surface p-10 text-center text-sm text-fg-muted">
+            loading…
+          </div>
+        )}
+
+        {quizzes === "error" && (
+          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
+            Failed to load your quizzes.
+          </div>
+        )}
+
+        {Array.isArray(quizzes) && quizzes.length === 0 && (
+          <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-fg-muted">
+            No quizzes yet — click <span className="text-fg">New quiz</span> to make one.
+          </div>
+        )}
+
+        {Array.isArray(quizzes) && quizzes.length > 0 && (
+          <ul className="space-y-2">
+            {quizzes.map((q) => (
+              <li key={q.id}>
+                <Link
+                  to={`/quizzes/${q.id}`}
+                  className="flex items-center justify-between rounded-md border border-border bg-surface p-4 hover:bg-surface-muted"
+                >
+                  <div>
+                    <div className="font-medium">{q.title}</div>
+                    <div className="mt-1 text-xs text-fg-muted">
+                      {q.questionCount} question{q.questionCount === 1 ? "" : "s"} ·{" "}
+                      {q.source} · {q.providerUsed}/{q.modelUsed} ·{" "}
+                      {new Date(q.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <span className="text-fg-muted">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
-    </div>
-  );
-}
-
-function ProvidersPanel() {
-  const state = useProviders();
-  return (
-    <div className="rounded-xl border border-border bg-surface p-8 shadow-sm">
-      <h3 className="text-lg font-semibold">AI providers</h3>
-      <p className="mt-1 text-sm text-fg-muted">
-        Configured providers and the models the API will accept for each.
-      </p>
-
-      {state.kind === "loading" && <p className="mt-4 text-sm text-fg-muted">loading…</p>}
-      {state.kind === "error" && (
-        <p className="mt-4 text-sm text-red-500">
-          failed to load providers (status {state.status})
-        </p>
-      )}
-      {state.kind === "ok" && (
-        <div className="mt-4 space-y-3">
-          <p className="text-sm text-fg-muted">
-            Default:{" "}
-            <span className="text-fg">{state.data.defaultProvider}</span> /{" "}
-            <span className="text-fg">{state.data.defaultModel}</span>
-          </p>
-          {state.data.providers.map((p) => (
-            <div key={p.provider} className="rounded-lg bg-surface-muted p-4">
-              <div className="font-medium">{p.provider}</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {p.models.map((m) => (
-                  <span
-                    key={m}
-                    className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-xs"
-                  >
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
