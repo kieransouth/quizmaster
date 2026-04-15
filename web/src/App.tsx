@@ -4,6 +4,7 @@ import { useBootstrap } from "./auth/useBootstrap";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import NewQuiz from "./pages/NewQuiz";
+import Play from "./pages/Play";
 import QuizDetail from "./pages/QuizDetail";
 import Register from "./pages/Register";
 
@@ -37,6 +38,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <QuizDetail />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/play/:id"
+          element={
+            <ProtectedRoute>
+              <Play />
             </ProtectedRoute>
           }
         />

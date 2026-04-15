@@ -10,6 +10,7 @@ import {
   type QuizDetailDto,
   type UpdateQuestionRequest,
 } from "../quizzes/api";
+import { startSession } from "../sessions/api";
 
 export default function QuizDetail() {
   const { id } = useParams<{ id: string }>();
@@ -162,6 +163,24 @@ export default function QuizDetail() {
           </h1>
           <div className="flex items-center gap-3 text-sm">
             {savingState === "saved" && <span className="text-fg-muted">saved</span>}
+            {questions.length > 0 && (
+              <button
+                type="button"
+                disabled={dirty}
+                title={dirty ? "Save changes first" : "Start a play session"}
+                onClick={async () => {
+                  try {
+                    const s = await startSession(loaded.id);
+                    navigate(`/play/${s.id}`);
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : "Couldn't start session");
+                  }
+                }}
+                className="rounded-md border border-accent/60 bg-accent/10 px-3 py-1 font-medium text-accent hover:bg-accent/20 disabled:opacity-40"
+              >
+                ▶ Play
+              </button>
+            )}
             <button
               type="button"
               onClick={onDeleteQuiz}
