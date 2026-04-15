@@ -52,3 +52,21 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# IDEs
+.vs/
+.idea/
+*.user
+*.suo
+
+# Frontend (Vite + React)
+node_modules/
+web/dist/
+*.local
+
+# Environment / secrets
+.env
+.env.*.local
+
+# Misc
+.DS_Store
