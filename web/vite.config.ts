@@ -10,6 +10,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5101',
         changeOrigin: true,
+        // Match Traefik's StripPrefix middleware in prod: API serves at
+        // root paths (/health, /quizzes, ...) and the /api segment is
+        // stripped before the request reaches it. Without this rewrite,
+        // dev calls fail with 404 even though prod works.
+        rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },
   },
