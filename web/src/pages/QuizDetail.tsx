@@ -25,6 +25,9 @@ export default function QuizDetail() {
 
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // Hide answers by default so the host can browse a saved quiz without
+  // spoiling themselves before play. Toggle to reveal when actually editing.
+  const [showAnswers, setShowAnswers] = useState(false);
 
   // Load
   useEffect(() => {
@@ -163,6 +166,13 @@ export default function QuizDetail() {
           </h1>
           <div className="flex items-center gap-3 text-sm">
             {savingState === "saved" && <span className="text-fg-muted">saved</span>}
+            <button
+              type="button"
+              onClick={() => setShowAnswers((v) => !v)}
+              className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg-muted hover:text-fg"
+            >
+              {showAnswers ? "Hide answers" : "Show answers"}
+            </button>
             {questions.length > 0 && (
               <button
                 type="button"
@@ -272,6 +282,7 @@ export default function QuizDetail() {
             key={q.id}
             index={i}
             q={q}
+            showAnswers={showAnswers}
             onChange={(patch) => updateQuestion(i, patch)}
             onDelete={() => deleteQuestion(i)}
             onRegenerate={() => onRegenerate(i)}
@@ -300,12 +311,14 @@ function CenteredMessage({ text, children }: { text?: string; children?: React.R
 function QuestionEditor({
   index,
   q,
+  showAnswers,
   onChange,
   onDelete,
   onRegenerate,
 }: {
   index: number;
   q: QuestionDto;
+  showAnswers: boolean;
   onChange: (patch: Partial<QuestionDto>) => void;
   onDelete: () => void;
   onRegenerate: () => void;
@@ -355,11 +368,17 @@ function QuestionEditor({
 
       <label className="mt-3 block text-xs text-fg-muted">
         Correct answer
-        <input
-          value={q.correctAnswer}
-          onChange={(e) => onChange({ correctAnswer: e.target.value })}
-          className="mt-1 w-full rounded-md border border-border bg-surface-muted px-3 py-1.5 font-mono text-sm text-fg outline-none focus:border-accent"
-        />
+        {showAnswers ? (
+          <input
+            value={q.correctAnswer}
+            onChange={(e) => onChange({ correctAnswer: e.target.value })}
+            className="mt-1 w-full rounded-md border border-border bg-surface-muted px-3 py-1.5 font-mono text-sm text-fg outline-none focus:border-accent"
+          />
+        ) : (
+          <div className="mt-1 w-full rounded-md border border-dashed border-border bg-surface-muted px-3 py-1.5 font-mono text-sm text-fg-muted/60 select-none">
+            ••••••••
+          </div>
+        )}
       </label>
 
       {q.type === "MultipleChoice" && q.options && (
@@ -376,7 +395,9 @@ function QuestionEditor({
               }}
               className={
                 "mt-1 w-full rounded-md border bg-surface-muted px-3 py-1.5 text-sm outline-none focus:border-accent " +
-                (opt === q.correctAnswer ? "border-accent text-fg" : "border-border text-fg-muted")
+                (showAnswers && opt === q.correctAnswer
+                  ? "border-accent text-fg"
+                  : "border-border text-fg-muted")
               }
             />
           ))}
@@ -386,7 +407,8 @@ function QuestionEditor({
       <label className="mt-3 block text-xs text-fg-muted">
         Explanation
         <input
-          value={q.explanation ?? ""}
+          value={showAnswers ? (q.explanation ?? "") : (q.explanation ? "••••••••" : "")}
+          disabled={!showAnswers}
           onChange={(e) => onChange({ explanation: e.target.value || null })}
           placeholder="(optional)"
           className="mt-1 w-full rounded-md border border-border bg-surface-muted px-3 py-1.5 text-sm text-fg outline-none focus:border-accent"
