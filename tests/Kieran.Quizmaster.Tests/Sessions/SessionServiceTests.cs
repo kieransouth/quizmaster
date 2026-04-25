@@ -261,4 +261,109 @@ public class SessionServiceTests
 
         asStranger.ShouldBeNull();
     }
+
+    // ----- MC option shuffle (Phase post-7 product asks) -----
+
+    /// <summary>Seeds a quiz with one MC question that has 8 options so shuffle collisions are negligible.</summary>
+    private static (User Owner, Quiz Quiz, Guid McId) SeedQuizWithLargeMc(SqliteTestDb db)
+    {
+        var owner = SeedUser(db);
+        var mcId  = Guid.NewGuid();
+        var quiz = new Quiz
+        {
+            Id              = Guid.NewGuid(),
+            Title           = "Shuffle quiz",
+            Source          = QuizSource.Generated,
+            ProviderUsed    = "Ollama",
+            ModelUsed       = "llama3.2:1b",
+            CreatedByUserId = owner.Id,
+            CreatedAt       = DateTimeOffset.UtcNow,
+            Questions =
+            [
+                new Question {
+                    Id            = mcId,
+                    Text          = "Pick one",
+                    Type          = QuestionType.MultipleChoice,
+                    CorrectAnswer = "Echo",
+                    OptionsJson   = JsonSerializer.Serialize(
+                        new[] { "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel" }),
+                    Order         = 0,
+                },
+            ],
+        };
+        db.Db.Quizzes.Add(quiz);
+        db.Db.SaveChanges();
+        return (owner, quiz, mcId);
+    }
+
+    [Fact]
+    public async Task MC_options_are_shuffled_in_session_view()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId) = SeedQuizWithLargeMc(db);
+        var (sut, _) = Build(db);
+        var canonical = new[] { "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel" };
+
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+
+        var options = session!.Questions.Single(q => q.Id == mcId).Options!;
+        // Same set of strings, but at least one position differs (probability
+        // of identical permutation with 8 unique options is 1/40320).
+        options.Count.ShouldBe(canonical.Length);
+        options.OrderBy(o => o).ShouldBe(canonical.OrderBy(o => o));
+        options.SequenceEqual(canonical).ShouldBeFalse(
+            "options should be shuffled; matching the canonical order is statistically nearly impossible");
+    }
+
+    [Fact]
+    public async Task MC_option_shuffle_is_deterministic_within_a_session()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId) = SeedQuizWithLargeMc(db);
+        var (sut, _) = Build(db);
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+
+        var first  = (await sut.GetByIdAsync(session!.Id, owner.Id, default))!
+                     .Questions.Single(q => q.Id == mcId).Options!;
+        var second = (await sut.GetByIdAsync(session.Id, owner.Id, default))!
+                     .Questions.Single(q => q.Id == mcId).Options!;
+
+        second.SequenceEqual(first).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task MC_option_shuffle_differs_across_sessions()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId) = SeedQuizWithLargeMc(db);
+        var (sut, _) = Build(db);
+
+        var s1 = await sut.StartAsync(quiz.Id, owner.Id, default);
+        var s2 = await sut.StartAsync(quiz.Id, owner.Id, default);
+
+        var o1 = s1!.Questions.Single(q => q.Id == mcId).Options!;
+        var o2 = s2!.Questions.Single(q => q.Id == mcId).Options!;
+
+        o1.SequenceEqual(o2).ShouldBeFalse(
+            "two different sessions over the same question should produce different option orders");
+    }
+
+    [Fact]
+    public async Task Reveal_auto_grades_correctly_after_shuffle()
+    {
+        // Even when the model originally placed the correct answer at position
+        // 4 (Echo), shuffling shouldn't break grading because we match by
+        // text, not index.
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId) = SeedQuizWithLargeMc(db);
+        var (sut, _) = Build(db);
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+
+        await sut.RecordAnswerAsync(session!.Id, mcId, owner.Id, new RecordAnswerRequest("Echo"), default);
+        var ok = (SessionResult.Ok)await sut.RevealAsync(session.Id, owner.Id, default);
+
+        var graded = ok.Session.Questions.Single(q => q.Id == mcId);
+        graded.Answer.IsCorrect.ShouldBe(true);
+        graded.Answer.PointsAwarded.ShouldBe(1m);
+    }
 }
