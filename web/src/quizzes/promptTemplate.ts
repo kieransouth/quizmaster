@@ -36,6 +36,12 @@ Rules:
 - "explanation" is optional but encouraged — one short sentence.
 - Do NOT include numbering or "Q1:" prefixes in "text".
 
+JSON formatting (this is strict — output must parse with JSON.parse):
+- Every string value must be valid JSON. Escape any double quote inside a string as \\" (e.g. What does \\"DNS\\" stand for?).
+- Escape backslashes as \\\\ and replace newlines inside strings with \\n.
+- Do NOT use smart quotes (“ ” ‘ ’) as the outer string delimiters — only straight ASCII " is valid JSON.
+- No trailing commas. No comments.
+
 Return ONLY a JSON object matching this schema. No markdown, no commentary:
 {
   "questions": [
