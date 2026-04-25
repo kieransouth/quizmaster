@@ -3,12 +3,8 @@
 # Public surface is fronted by Traefik (assumed already running on the
 # external `web` network). Postgres + Ollama stay on the internal network.
 #
-# IMPORTANT — fill these in before bringing the stack up:
-#   * Traefik certificate resolver labels (`traefik.http.routers.*.tls.certresolver`)
-#     are intentionally omitted. Add the resolver name your Traefik instance
-#     advertises, e.g.:
-#         - "traefik.http.routers.quizmaster-api.tls.certresolver=letsencrypt"
-#   * Populate `.env` from `.env.example`.
+# Per-deployment settings (host, cert resolver, secrets) live in `.env` —
+# copy from `.env.example` before bringing the stack up.
 
 services:
   api:
@@ -41,6 +37,7 @@ services:
       - "traefik.http.routers.quizmaster-api.rule=Host(`${QUIZMASTER_HOST}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.quizmaster-api.entrypoints=websecure"
       - "traefik.http.routers.quizmaster-api.tls=true"
+      - "traefik.http.routers.quizmaster-api.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.middlewares.quizmaster-api-strip.stripprefix.prefixes=/api"
       - "traefik.http.routers.quizmaster-api.middlewares=quizmaster-api-strip"
       - "traefik.http.services.quizmaster-api.loadbalancer.server.port=8080"
@@ -59,6 +56,7 @@ services:
       - "traefik.http.routers.quizmaster-web.rule=Host(`${QUIZMASTER_HOST}`)"
       - "traefik.http.routers.quizmaster-web.entrypoints=websecure"
       - "traefik.http.routers.quizmaster-web.tls=true"
+      - "traefik.http.routers.quizmaster-web.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.quizmaster-web.loadbalancer.server.port=80"
       # api router has a more specific rule (Host && PathPrefix), so Traefik
       # will route /api/* to the API automatically — no priority hack needed.
