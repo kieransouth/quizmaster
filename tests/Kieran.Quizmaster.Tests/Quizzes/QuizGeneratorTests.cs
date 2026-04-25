@@ -187,7 +187,24 @@ public class QuizGeneratorTests
                    return draft with { Questions = [flagged] };
                });
 
-        var events = await Drain(sut.GenerateAsync(StarWars(1, factCheck: true), default));
+        // Generation uses Ollama+llama3.2:1b; fact-check should use a
+        // different pair (OpenAI+gpt-4o) to verify independent grading.
+        var req = StarWars(1, factCheck: true) with
+        {
+            FactCheckProvider = "OpenAI",
+            FactCheckModel    = "gpt-4o",
+        };
+        var events = await Drain(sut.GenerateAsync(req, default));
+
+        // Critical assertion: checker called with the FACT-CHECK pair, not
+        // the generation pair.
+        await checker.Received(1).CheckAsync(
+            Arg.Any<DraftQuiz>(),
+            AiProviderKind.OpenAI,
+            "gpt-4o",
+            Arg.Any<CancellationToken>());
+
+        var events2 = events; // alias to keep downstream assertions readable
 
         events.OfType<GenerationEvent.Status>().Select(s => s.Stage)
               .ShouldContain("fact-checking");
@@ -202,6 +219,44 @@ public class QuizGeneratorTests
         // Done event reflects the final (flagged) state.
         var done = events.OfType<GenerationEvent.Done>().Single();
         done.Quiz.Questions[0].FactCheckFlagged.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Fact_check_falls_back_to_generation_provider_when_unset()
+    {
+        var (sut, client, checker) = Build();
+        StubFullJson(client, """
+        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
+        """);
+        checker.CheckAsync(Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(call => call.Arg<DraftQuiz>());
+
+        // No FactCheck* fields set — should fall back to the generation pair.
+        await Drain(sut.GenerateAsync(StarWars(1, factCheck: true), default));
+
+        await checker.Received(1).CheckAsync(
+            Arg.Any<DraftQuiz>(),
+            AiProviderKind.Ollama,
+            "llama3.2:1b",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Fact_check_unknown_provider_surfaces_warning_and_skips()
+    {
+        var (sut, client, checker) = Build();
+        StubFullJson(client, """
+        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
+        """);
+        var req = StarWars(1, factCheck: true) with { FactCheckProvider = "Bogus" };
+
+        var events = await Drain(sut.GenerateAsync(req, default));
+
+        await checker.DidNotReceive().CheckAsync(
+            Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        var warning = events.OfType<GenerationEvent.Warning>().Single();
+        warning.Message.ShouldContain("Bogus");
+        events.Last().ShouldBeOfType<GenerationEvent.Done>();
     }
 
     [Fact]

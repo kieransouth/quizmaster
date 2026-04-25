@@ -30,6 +30,11 @@ export default function NewQuiz() {
   const [factCheck, setFactCheck] = useState(false);
   const [provider, setProvider] = useState<string>("");
   const [model, setModel] = useState<string>("");
+  // Independent fact-check provider/model. Asking a different model to
+  // verify is the whole point of fact-check; same model grading itself
+  // is mostly a vibe check.
+  const [factCheckProvider, setFactCheckProvider] = useState<string>("");
+  const [factCheckModel, setFactCheckModel] = useState<string>("");
 
   // Seed provider/model defaults once the providers list loads.
   useEffect(() => {
@@ -40,6 +45,23 @@ export default function NewQuiz() {
     }
   }, [providers, provider]);
 
+  // Default the fact-check pair to a *different* provider when more than
+  // one is configured; otherwise the default provider but a different model.
+  useEffect(() => {
+    if (providers.kind !== "ok" || !provider) return;
+    if (factCheckProvider) return;
+    const otherProvider = providers.data.providers.find((p) => p.provider !== provider);
+    if (otherProvider) {
+      setFactCheckProvider(otherProvider.provider);
+      setFactCheckModel(otherProvider.models[0] ?? "");
+    } else {
+      const same = providers.data.providers.find((p) => p.provider === provider);
+      const altModel = same?.models.find((m) => m !== model) ?? same?.models[0] ?? "";
+      setFactCheckProvider(provider);
+      setFactCheckModel(altModel);
+    }
+  }, [providers, provider, model, factCheckProvider]);
+
   // When provider changes, snap model to a valid choice for that provider.
   useEffect(() => {
     if (providers.kind !== "ok") return;
@@ -48,6 +70,15 @@ export default function NewQuiz() {
       setModel(p.models[0] ?? "");
     }
   }, [provider, model, providers]);
+
+  // Same snap behaviour for the fact-check pair.
+  useEffect(() => {
+    if (providers.kind !== "ok") return;
+    const p = providers.data.providers.find((x) => x.provider === factCheckProvider);
+    if (p && !p.models.includes(factCheckModel)) {
+      setFactCheckModel(p.models[0] ?? "");
+    }
+  }, [factCheckProvider, factCheckModel, providers]);
 
   // Derived state from the event stream.
   const status = useMemo(
@@ -97,6 +128,10 @@ export default function NewQuiz() {
         runFactCheck: factCheck,
         provider,
         model,
+        // Only send fact-check pair when fact-check is enabled.
+        ...(factCheck && factCheckProvider
+          ? { factCheckProvider, factCheckModel }
+          : {}),
       };
       await stream.start("/api/quizzes/generate", req);
     } else {
@@ -106,6 +141,9 @@ export default function NewQuiz() {
         runFactCheck: factCheck,
         provider,
         model,
+        ...(factCheck && factCheckProvider
+          ? { factCheckProvider, factCheckModel }
+          : {}),
       };
       await stream.start("/api/quizzes/import", req);
     }
@@ -119,6 +157,10 @@ export default function NewQuiz() {
   const currentProviderModels =
     providers.kind === "ok"
       ? providers.data.providers.find((p) => p.provider === provider)?.models ?? []
+      : [];
+  const currentFactCheckModels =
+    providers.kind === "ok"
+      ? providers.data.providers.find((p) => p.provider === factCheckProvider)?.models ?? []
       : [];
 
   return (
@@ -220,6 +262,51 @@ export default function NewQuiz() {
             />
             Run AI fact-check (slower, second model call)
           </label>
+
+          {factCheck && providers.kind === "ok" && (
+            <div className="space-y-2 rounded-md border border-border bg-surface-muted p-3">
+              <p className="text-xs text-fg-muted">
+                Fact-check using a different model gives independent verification
+                rather than asking the same model to grade itself.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs text-fg-muted">
+                    Fact-check provider
+                  </label>
+                  <select
+                    value={factCheckProvider}
+                    onChange={(e) => setFactCheckProvider(e.target.value)}
+                    disabled={stream.running}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-fg"
+                  >
+                    {providers.data.providers.map((p) => (
+                      <option key={p.provider} value={p.provider}>
+                        {p.provider}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-fg-muted">
+                    Fact-check model
+                  </label>
+                  <select
+                    value={factCheckModel}
+                    onChange={(e) => setFactCheckModel(e.target.value)}
+                    disabled={stream.running}
+                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-fg"
+                  >
+                    {currentFactCheckModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

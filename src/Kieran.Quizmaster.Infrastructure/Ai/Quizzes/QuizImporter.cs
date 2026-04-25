@@ -52,18 +52,28 @@ public sealed class QuizImporter(
         if (request.RunFactCheck && collected.Count > 0)
         {
             yield return new GenerationEvent.Status("fact-checking");
+            var factCheckProviderName = request.FactCheckProvider ?? request.Provider;
+            var factCheckModel        = request.FactCheckModel    ?? request.Model;
             string?              factCheckError = null;
             List<DraftQuestion>? updated        = null;
-            try
+
+            if (!AiProviderKind.TryFromName(factCheckProviderName, out var factCheckKind))
             {
-                var checkedDraft = await factChecker.CheckAsync(
-                    new DraftQuiz(
-                        request.Title, "Imported", request.Provider, request.Model,
-                        Topics: [], request.SourceText, collected),
-                    providerKind, request.Model, ct);
-                updated = [.. checkedDraft.Questions];
+                factCheckError = $"unknown provider '{factCheckProviderName}'";
             }
-            catch (Exception ex) { factCheckError = ex.Message; }
+            else
+            {
+                try
+                {
+                    var checkedDraft = await factChecker.CheckAsync(
+                        new DraftQuiz(
+                            request.Title, "Imported", request.Provider, request.Model,
+                            Topics: [], request.SourceText, collected),
+                        factCheckKind, factCheckModel, ct);
+                    updated = [.. checkedDraft.Questions];
+                }
+                catch (Exception ex) { factCheckError = ex.Message; }
+            }
 
             if (factCheckError is not null)
             {

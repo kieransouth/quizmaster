@@ -40,6 +40,10 @@ export interface GenerateQuizRequest {
   runFactCheck: boolean;
   provider: string;
   model: string;
+  /** Optional: provider used for the fact-check pass. Falls back to `provider`. */
+  factCheckProvider?: string;
+  /** Optional: model used for the fact-check pass. Falls back to `model`. */
+  factCheckModel?: string;
 }
 
 export interface ImportQuizRequest {
@@ -48,4 +52,6 @@ export interface ImportQuizRequest {
   runFactCheck: boolean;
   provider: string;
   model: string;
+  factCheckProvider?: string;
+  factCheckModel?: string;
 }

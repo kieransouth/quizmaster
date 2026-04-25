@@ -62,18 +62,33 @@ public sealed class QuizGenerator(
         if (request.RunFactCheck)
         {
             yield return new GenerationEvent.Status("fact-checking");
+
+            // Resolve fact-check provider+model. Falls back to generation pair
+            // when the request omits them. Asking a different model to verify
+            // is the whole point — same model grading its own work is mostly
+            // a vibe check.
+            var factCheckProviderName = request.FactCheckProvider ?? request.Provider;
+            var factCheckModel        = request.FactCheckModel    ?? request.Model;
             string?               factCheckError = null;
             List<DraftQuestion>?  updated        = null;
-            try
+
+            if (!AiProviderKind.TryFromName(factCheckProviderName, out var factCheckKind))
             {
-                var checkedDraft = await factChecker.CheckAsync(
-                    new DraftQuiz(
-                        request.Title, "Generated", request.Provider, request.Model,
-                        request.Topics, SourceText: null, collected),
-                    providerKind, request.Model, ct);
-                updated = [.. checkedDraft.Questions];
+                factCheckError = $"unknown provider '{factCheckProviderName}'";
             }
-            catch (Exception ex) { factCheckError = ex.Message; }
+            else
+            {
+                try
+                {
+                    var checkedDraft = await factChecker.CheckAsync(
+                        new DraftQuiz(
+                            request.Title, "Generated", request.Provider, request.Model,
+                            request.Topics, SourceText: null, collected),
+                        factCheckKind, factCheckModel, ct);
+                    updated = [.. checkedDraft.Questions];
+                }
+                catch (Exception ex) { factCheckError = ex.Message; }
+            }
 
             if (factCheckError is not null)
             {

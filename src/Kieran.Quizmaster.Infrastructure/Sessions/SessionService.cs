@@ -156,14 +156,26 @@ public sealed class SessionService(ApplicationDbContext db, TimeProvider clock) 
             .Select(q =>
             {
                 var ans = answersByQ.GetValueOrDefault(q.Id);
+                var options = q.OptionsJson is null
+                    ? null
+                    : JsonSerializer.Deserialize<List<string>>(q.OptionsJson);
+
+                // Shuffle MC options deterministically per (session, question)
+                // so AI's positional bias doesn't leak the answer. Same
+                // (sessionId, questionId) always produces the same order, so
+                // back-navigation and refresh work; different sessions get
+                // different orders.
+                if (q.Type == QuestionType.MultipleChoice && options is { Count: > 1 })
+                {
+                    options = ShuffleDeterministic(options, session.Id, q.Id);
+                }
+
                 return new SessionQuestionDto(
                     Id:            q.Id,
                     Text:          q.Text,
                     Type:          q.Type.Name,
                     CorrectAnswer: hideAnswers ? null : q.CorrectAnswer,
-                    Options:       q.OptionsJson is null
-                                       ? null
-                                       : JsonSerializer.Deserialize<List<string>>(q.OptionsJson),
+                    Options:       options,
                     Explanation:   hideAnswers ? null : q.Explanation,
                     Order:         q.Order,
                     Answer: ans is null
@@ -194,5 +206,45 @@ public sealed class SessionService(ApplicationDbContext db, TimeProvider clock) 
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToBase64String(bytes)
             .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+    }
+
+    /// <summary>
+    /// Fisher–Yates shuffle keyed off a deterministic seed derived from
+    /// (sessionId, questionId). Avoids HashCode.Combine and Guid.GetHashCode
+    /// (both process-randomised) so the shuffle is stable across restarts
+    /// and machines for the same key — refresh during play won't reshuffle.
+    /// </summary>
+    private static List<string> ShuffleDeterministic(List<string> source, Guid sessionId, Guid questionId)
+    {
+        var seed = DeterministicSeed(sessionId, questionId);
+        var rng  = new Random(seed);
+        var copy = new List<string>(source);
+        for (var i = copy.Count - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (copy[i], copy[j]) = (copy[j], copy[i]);
+        }
+        return copy;
+    }
+
+    private static int DeterministicSeed(Guid a, Guid b)
+    {
+        Span<byte> ba = stackalloc byte[16];
+        Span<byte> bb = stackalloc byte[16];
+        a.TryWriteBytes(ba);
+        b.TryWriteBytes(bb);
+
+        // XOR the two byte arrays then fold into a 32-bit accumulator.
+        // Using 31 as the multiplier (classic string-hash style) — the result
+        // doesn't need to be cryptographic, just stable.
+        unchecked
+        {
+            var seed = 0;
+            for (var i = 0; i < 16; i++)
+            {
+                seed = (seed * 31) + (ba[i] ^ bb[i]);
+            }
+            return seed;
+        }
     }
 }
