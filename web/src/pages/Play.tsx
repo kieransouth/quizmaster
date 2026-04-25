@@ -69,6 +69,7 @@ function Slideshow({
 
   const [draft, setDraft] = useState(q.answer.answerText);
   const [showHelp, setShowHelp] = useState(false);
+  const [busy, setBusy] = useState<"next" | "prev" | "reveal" | null>(null);
 
   // Sync local draft when navigating to a different question.
   useEffect(() => {
@@ -76,26 +77,32 @@ function Slideshow({
   }, [q.id, q.answer.answerText]);
 
   async function persistAndAdvance(direction: "next" | "prev" | "reveal") {
-    // Save the current draft if it differs.
-    if (draft !== q.answer.answerText) {
-      try {
-        const updated = await recordAnswer(session.id, q.id, draft);
-        onChange(updated);
-      } catch (e) {
-        push(e instanceof Error ? e.message : "Save failed", "error");
-        return;
+    if (busy) return; // ignore double-clicks while a save is in flight
+    setBusy(direction);
+    try {
+      // Save the current draft if it differs.
+      if (draft !== q.answer.answerText) {
+        try {
+          const updated = await recordAnswer(session.id, q.id, draft);
+          onChange(updated);
+        } catch (e) {
+          push(e instanceof Error ? e.message : "Save failed", "error");
+          return;
+        }
       }
-    }
 
-    if (direction === "prev" && idx > 0) setIdx(idx - 1);
-    if (direction === "next" && !last) setIdx(idx + 1);
-    if (direction === "reveal" && last) {
-      try {
-        const updated = await reveal(session.id);
-        onChange(updated);
-      } catch (e) {
-        push(e instanceof Error ? e.message : "Reveal failed", "error");
+      if (direction === "prev" && idx > 0) setIdx(idx - 1);
+      if (direction === "next" && !last) setIdx(idx + 1);
+      if (direction === "reveal" && last) {
+        try {
+          const updated = await reveal(session.id);
+          onChange(updated);
+        } catch (e) {
+          push(e instanceof Error ? e.message : "Reveal failed", "error");
+        }
       }
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -119,6 +126,21 @@ function Slideshow({
         return;
       }
       if (showHelp) return; // pause shortcuts while overlay is open
+
+      // MC: digit keys 1..N pick the option at that index.
+      if (
+        q.type === "MultipleChoice" &&
+        q.options &&
+        !inEditable &&
+        /^[1-9]$/.test(e.key)
+      ) {
+        const i = parseInt(e.key, 10) - 1;
+        if (i < q.options.length) {
+          e.preventDefault();
+          setDraft(q.options[i]);
+          return;
+        }
+      }
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -170,7 +192,7 @@ function Slideshow({
 
         {q.type === "MultipleChoice" && q.options ? (
           <div className="mt-8 space-y-2">
-            {q.options.map((opt) => (
+            {q.options.map((opt, i) => (
               <label
                 key={opt}
                 className={
@@ -185,6 +207,9 @@ function Slideshow({
                   checked={draft === opt}
                   onChange={() => setDraft(opt)}
                 />
+                <kbd className="rounded border border-border bg-surface-muted px-1.5 py-0.5 font-mono text-xs text-fg-muted">
+                  {i + 1}
+                </kbd>
                 <span>{opt}</span>
               </label>
             ))}
@@ -201,7 +226,8 @@ function Slideshow({
         )}
 
         <p className="mt-6 text-xs text-fg-muted">
-          Enter to {last ? "reveal answers" : "save + next"}; ←/→ to navigate.
+          {q.type === "MultipleChoice" ? "1–9 to pick · " : ""}Enter to{" "}
+          {last ? "reveal answers" : "save + next"}; ←/→ to navigate.
         </p>
       </main>
 
@@ -210,26 +236,28 @@ function Slideshow({
           <button
             type="button"
             onClick={() => persistAndAdvance("prev")}
-            disabled={idx === 0}
+            disabled={idx === 0 || busy !== null}
             className="rounded-md border border-border bg-surface-muted px-4 py-2 text-sm text-fg-muted hover:text-fg disabled:opacity-30"
           >
-            ← Previous
+            {busy === "prev" ? <SpinnerLabel label="Saving" /> : "← Previous"}
           </button>
           {last ? (
             <button
               type="button"
               onClick={() => persistAndAdvance("reveal")}
-              className="rounded-md bg-accent px-6 py-2 font-medium text-accent-fg"
+              disabled={busy !== null}
+              className="flex items-center justify-center rounded-md bg-accent px-6 py-2 font-medium text-accent-fg disabled:opacity-60"
             >
-              Reveal answers
+              {busy === "reveal" ? <SpinnerLabel label="Revealing" /> : "Reveal answers"}
             </button>
           ) : (
             <button
               type="button"
               onClick={() => persistAndAdvance("next")}
-              className="rounded-md bg-accent px-6 py-2 font-medium text-accent-fg"
+              disabled={busy !== null}
+              className="flex items-center justify-center rounded-md bg-accent px-6 py-2 font-medium text-accent-fg disabled:opacity-60"
             >
-              Next →
+              {busy === "next" ? <SpinnerLabel label="Saving" /> : "Next →"}
             </button>
           )}
         </div>
@@ -237,6 +265,24 @@ function Slideshow({
 
       {showHelp && <KeyboardHelpOverlay last={last} onClose={() => setShowHelp(false)} />}
     </div>
+  );
+}
+
+function SpinnerLabel({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <svg
+        viewBox="0 0 24 24"
+        className="h-4 w-4 animate-spin"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <circle cx="12" cy="12" r="9" opacity="0.25" />
+        <path d="M21 12a9 9 0 0 0-9-9" />
+      </svg>
+      <span>{label}…</span>
+    </span>
   );
 }
 
@@ -262,6 +308,7 @@ function KeyboardHelpOverlay({ last, onClose }: { last: boolean; onClose: () => 
           </button>
         </div>
         <dl className="mt-4 space-y-2 text-sm">
+          <Shortcut keys={["1", "…", "9"]} desc="pick a multiple-choice option" />
           <Shortcut keys={["Enter"]} desc={last ? "save and reveal answers" : "save and advance"} />
           <Shortcut keys={["→"]} desc="next question" />
           <Shortcut keys={["←"]} desc="previous question" />
