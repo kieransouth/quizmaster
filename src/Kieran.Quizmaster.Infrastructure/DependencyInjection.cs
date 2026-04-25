@@ -56,6 +56,9 @@ public static class DependencyInjection
                       "Jwt:SigningKey must be at least 32 characters.")
             .ValidateOnStart();
 
+        services.AddOptions<AuthOptions>()
+            .Bind(configuration.GetSection(AuthOptions.SectionName));
+
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<IJwtTokenService, JwtTokenService>();
         services.AddScoped<IRefreshTokenService, RefreshTokenService>();

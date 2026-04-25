@@ -33,16 +33,18 @@ if not errorlevel 1 (
   echo Ollama   : started
 )
 
-REM -------- 3. Read provider keys from .env --------
+REM -------- 3. Read provider keys + auth toggles from .env --------
 if exist .env (
   for /f "usebackq tokens=1* delims==" %%a in (".env") do (
     if /i "%%a"=="OPENAI_API_KEY"       set "OPENAI_API_KEY=%%b"
     if /i "%%a"=="ANTHROPIC_API_KEY"    set "ANTHROPIC_API_KEY=%%b"
     if /i "%%a"=="OLLAMA_CLOUD_API_KEY" set "OLLAMA_CLOUD_API_KEY=%%b"
+    if /i "%%a"=="REGISTRATION_ENABLED" set "REGISTRATION_ENABLED=%%b"
   )
   REM Map them into the IConfiguration env-var convention.
-  if defined OPENAI_API_KEY    set "Ai__Providers__OpenAI__ApiKey=!OPENAI_API_KEY!"
-  if defined ANTHROPIC_API_KEY set "Ai__Providers__Anthropic__ApiKey=!ANTHROPIC_API_KEY!"
+  if defined OPENAI_API_KEY        set "Ai__Providers__OpenAI__ApiKey=!OPENAI_API_KEY!"
+  if defined ANTHROPIC_API_KEY     set "Ai__Providers__Anthropic__ApiKey=!ANTHROPIC_API_KEY!"
+  if defined REGISTRATION_ENABLED  set "Auth__RegistrationEnabled=!REGISTRATION_ENABLED!"
 ) else (
   echo .env not found - paid providers won't work without their API keys.
 )

@@ -6,6 +6,7 @@ import type { TokenPair } from "../auth/types";
 export default function Login() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const registrationEnabled = useAuthStore((s) => s.registrationEnabled);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -48,12 +49,14 @@ export default function Login() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
-      <p className="mt-6 text-sm text-fg-muted">
-        New?{" "}
-        <Link to="/register" className="text-accent underline">
-          Create an account
-        </Link>
-      </p>
+      {registrationEnabled && (
+        <p className="mt-6 text-sm text-fg-muted">
+          New?{" "}
+          <Link to="/register" className="text-accent underline">
+            Create an account
+          </Link>
+        </p>
+      )}
     </AuthShell>
   );
 }

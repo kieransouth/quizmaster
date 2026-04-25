@@ -7,11 +7,27 @@ import { AuthShell, Field } from "./Login";
 export default function Register() {
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const registrationEnabled = useAuthStore((s) => s.registrationEnabled);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  if (!registrationEnabled) {
+    return (
+      <AuthShell title="Registration closed">
+        <p className="text-sm text-fg-muted">
+          New account creation is currently disabled. Existing accounts can still sign in.
+        </p>
+        <p className="mt-6 text-sm text-fg-muted">
+          <Link to="/login" className="text-accent underline">
+            Back to sign in
+          </Link>
+        </p>
+      </AuthShell>
+    );
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
