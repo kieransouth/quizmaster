@@ -3,14 +3,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { useProviders } from "../ai/useProviders";
 import { saveQuiz } from "../quizzes/api";
 import { useGenerationStream } from "../quizzes/useGenerationStream";
+import { buildGenerationPrompt } from "../quizzes/promptTemplate";
 import type {
   DraftQuestion,
   GenerateQuizRequest,
+  ImportFromJsonRequest,
   ImportQuizRequest,
   TopicRequest,
 } from "../quizzes/types";
 
-type Mode = "generate" | "import";
+type Mode = "generate" | "import" | "byo";
 
 export default function NewQuiz() {
   const navigate = useNavigate();
@@ -35,6 +37,9 @@ export default function NewQuiz() {
   // is mostly a vibe check.
   const [factCheckProvider, setFactCheckProvider] = useState<string>("");
   const [factCheckModel, setFactCheckModel] = useState<string>("");
+  // BYO-AI mode: user pastes JSON from an external AI tool.
+  const [pastedJson, setPastedJson] = useState("");
+  const [promptCopied, setPromptCopied] = useState(false);
 
   // Seed provider/model defaults once the providers list loads.
   useEffect(() => {
@@ -110,17 +115,30 @@ export default function NewQuiz() {
   const totalRequested = topics.reduce((sum, t) => sum + (t.count || 0), 0);
   const validToSubmit =
     title.trim().length > 0 &&
-    provider &&
-    model &&
-    (mode === "generate"
-      ? topics.length > 0 && topics.every((t) => t.name.trim()) && totalRequested > 0
-      : sourceText.trim().length > 0);
+    (mode === "byo"
+      ? pastedJson.trim().length > 0
+      : provider && model &&
+        (mode === "generate"
+          ? topics.length > 0 && topics.every((t) => t.name.trim()) && totalRequested > 0
+          : sourceText.trim().length > 0));
+
+  const generationPrompt =
+    mode === "byo" ? buildGenerationPrompt(topics, mcFraction) : "";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validToSubmit || stream.running) return;
 
-    if (mode === "generate") {
+    if (mode === "byo") {
+      const req: ImportFromJsonRequest = {
+        title: title.trim(),
+        topics: topics
+          .filter((t) => t.name.trim())
+          .map((t) => ({ name: t.name.trim(), count: t.count })),
+        sourceJson: pastedJson,
+      };
+      await stream.start("/api/quizzes/import-json", req);
+    } else if (mode === "generate") {
       const req: GenerateQuizRequest = {
         title: title.trim(),
         topics: topics.map((t) => ({ name: t.name.trim(), count: t.count })),
@@ -190,7 +208,7 @@ export default function NewQuiz() {
             />
           </div>
 
-          {mode === "generate" ? (
+          {mode === "generate" || mode === "byo" ? (
             <>
               <TopicsEditor topics={topics} onChange={setTopics} disabled={stream.running} />
               <McMixSlider value={mcFraction} onChange={setMcFraction} disabled={stream.running} />
@@ -212,13 +230,32 @@ export default function NewQuiz() {
             </div>
           )}
 
-          {providers.kind === "loading" && (
+          {mode === "byo" && (
+            <ByoAiPanel
+              prompt={generationPrompt}
+              copied={promptCopied}
+              onCopy={async () => {
+                try {
+                  await navigator.clipboard.writeText(generationPrompt);
+                  setPromptCopied(true);
+                  setTimeout(() => setPromptCopied(false), 2000);
+                } catch {
+                  /* clipboard blocked — user can select manually */
+                }
+              }}
+              json={pastedJson}
+              onJsonChange={setPastedJson}
+              disabled={stream.running}
+            />
+          )}
+
+          {mode !== "byo" && providers.kind === "loading" && (
             <p className="text-sm text-fg-muted">loading providers…</p>
           )}
-          {providers.kind === "error" && (
+          {mode !== "byo" && providers.kind === "error" && (
             <p className="text-sm text-red-500">failed to load providers</p>
           )}
-          {providers.kind === "ok" && (
+          {mode !== "byo" && providers.kind === "ok" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-sm text-fg-muted">Provider</label>
@@ -253,15 +290,17 @@ export default function NewQuiz() {
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-sm text-fg-muted">
-            <input
-              type="checkbox"
-              checked={factCheck}
-              onChange={(e) => setFactCheck(e.target.checked)}
-              disabled={stream.running}
-            />
-            Run AI fact-check (slower, second model call)
-          </label>
+          {mode !== "byo" && (
+            <label className="flex items-center gap-2 text-sm text-fg-muted">
+              <input
+                type="checkbox"
+                checked={factCheck}
+                onChange={(e) => setFactCheck(e.target.checked)}
+                disabled={stream.running}
+              />
+              Run AI fact-check (slower, second model call)
+            </label>
+          )}
 
           {factCheck && providers.kind === "ok" && (
             <div className="space-y-2 rounded-md border border-border bg-surface-muted p-3">
@@ -319,7 +358,9 @@ export default function NewQuiz() {
                 : "Working…"
               : mode === "generate"
                 ? "Generate"
-                : "Extract"}
+                : mode === "byo"
+                  ? "Import JSON"
+                  : "Extract"}
           </button>
 
           {stream.running && (
@@ -431,6 +472,64 @@ export default function NewQuiz() {
   );
 }
 
+function ByoAiPanel({
+  prompt,
+  copied,
+  onCopy,
+  json,
+  onJsonChange,
+  disabled,
+}: {
+  prompt: string;
+  copied: boolean;
+  onCopy: () => void;
+  json: string;
+  onJsonChange: (v: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="space-y-4 rounded-md border border-accent/40 bg-accent/5 p-3">
+      <div>
+        <div className="mb-1 flex items-center justify-between text-xs text-fg-muted">
+          <span>Prompt to paste into your AI</span>
+          <button
+            type="button"
+            onClick={onCopy}
+            disabled={disabled}
+            className="rounded-md border border-border bg-surface-muted px-2 py-0.5 text-fg-muted hover:text-fg disabled:opacity-50"
+          >
+            {copied ? "copied" : "copy"}
+          </button>
+        </div>
+        <textarea
+          value={prompt}
+          readOnly
+          rows={10}
+          className="w-full rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs text-fg-muted"
+        />
+        <p className="mt-1 text-xs text-fg-muted">
+          Edit topics + mix on the left to update the prompt. Run it in
+          ChatGPT, Claude.ai, anywhere — then paste the JSON below.
+        </p>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-xs text-fg-muted">
+          AI's JSON response
+        </label>
+        <textarea
+          value={json}
+          onChange={(e) => onJsonChange(e.target.value)}
+          disabled={disabled}
+          rows={10}
+          placeholder={'{ "questions": [ ... ] }'}
+          className="w-full rounded-md border border-border bg-surface-muted px-3 py-2 font-mono text-xs text-fg outline-none focus:border-accent"
+        />
+      </div>
+    </div>
+  );
+}
+
 function ModeToggle({
   mode,
   onChange,
@@ -442,7 +541,7 @@ function ModeToggle({
 }) {
   return (
     <div className="inline-flex rounded-md border border-border bg-surface-muted p-1 text-sm">
-      {(["generate", "import"] as Mode[]).map((m) => (
+      {(["generate", "import", "byo"] as Mode[]).map((m) => (
         <button
           key={m}
           type="button"
@@ -455,7 +554,7 @@ function ModeToggle({
               : "text-fg-muted hover:text-fg")
           }
         >
-          {m === "generate" ? "Generate" : "Import"}
+          {m === "generate" ? "Generate" : m === "import" ? "Import" : "BYO AI"}
         </button>
       ))}
     </div>

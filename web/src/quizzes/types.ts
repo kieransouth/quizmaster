@@ -55,3 +55,10 @@ export interface ImportQuizRequest {
   factCheckProvider?: string;
   factCheckModel?: string;
 }
+
+/** "Bring your own AI" — pre-formed JSON the user got from an external tool. */
+export interface ImportFromJsonRequest {
+  title: string;
+  topics: TopicRequest[];
+  sourceJson: string;
+}

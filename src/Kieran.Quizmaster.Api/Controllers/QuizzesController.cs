@@ -13,6 +13,7 @@ namespace Kieran.Quizmaster.Api.Controllers;
 public class QuizzesController(
     IQuizGenerator           generator,
     IQuizImporter            importer,
+    IQuizJsonImporter        jsonImporter,
     IQuizService             quizService,
     IQuizQuestionRegenerator regenerator) : ControllerBase
 {
@@ -46,6 +47,24 @@ public class QuizzesController(
     {
         Response.EnableSse();
         await foreach (var evt in importer.ImportAsync(request, cancellationToken))
+        {
+            await Response.WriteEventAsync(evt, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// "Bring your own AI": user pasted JSON they got from an external AI
+    /// using the prompt template Quizmaster recommends. We just parse it
+    /// and emit the same SSE event vocabulary so the frontend reuses the
+    /// review/save flow. No AI calls happen on our side.
+    /// </summary>
+    [HttpPost("import-json")]
+    public async Task ImportJsonStream(
+        [FromBody] ImportFromJsonRequest request,
+        CancellationToken                cancellationToken)
+    {
+        Response.EnableSse();
+        await foreach (var evt in jsonImporter.ImportFromJsonAsync(request, cancellationToken))
         {
             await Response.WriteEventAsync(evt, cancellationToken);
         }
