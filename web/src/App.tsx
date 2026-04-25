@@ -8,6 +8,7 @@ import Play from "./pages/Play";
 import QuizDetail from "./pages/QuizDetail";
 import Register from "./pages/Register";
 import SharedSession from "./pages/SharedSession";
+import { DesktopOnlyBanner } from "./ui/DesktopOnlyBanner";
 
 export default function App() {
   // Attempt to rehydrate the session via the refresh cookie on first load.
@@ -15,6 +16,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <DesktopOnlyBanner />
       <Routes>
         <Route path="/login"        element={<Login />} />
         <Route path="/register"     element={<Register />} />

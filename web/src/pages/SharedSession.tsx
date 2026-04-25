@@ -5,6 +5,7 @@ import {
   type PublicQuestion,
   type PublicSessionSummary,
 } from "../sessions/sharedApi";
+import { ThemePicker } from "../ui/ThemePicker";
 
 export default function SharedSession() {
   const { token } = useParams<{ token: string }>();
@@ -59,6 +60,11 @@ export default function SharedSession() {
 
   return (
     <div className="min-h-full">
+      <header className="border-b border-border bg-surface">
+        <div className="mx-auto flex max-w-3xl items-center justify-end px-6 py-3">
+          <ThemePicker compact />
+        </div>
+      </header>
       <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
         {/* Score hero */}
         <section className="rounded-2xl border border-border bg-surface p-8 text-center shadow-sm">

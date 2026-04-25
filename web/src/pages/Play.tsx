@@ -9,6 +9,8 @@ import {
   type SessionDto,
   type SessionQuestionDto,
 } from "../sessions/api";
+import { ThemePicker } from "../ui/ThemePicker";
+import { useToast } from "../ui/toast";
 
 export default function Play() {
   const { id } = useParams<{ id: string }>();
@@ -60,11 +62,13 @@ function Slideshow({
   session: SessionDto;
   onChange: (s: SessionDto) => void;
 }) {
+  const { push } = useToast();
   const [idx, setIdx] = useState(0);
   const q = session.questions[idx];
   const last = idx === session.questions.length - 1;
 
   const [draft, setDraft] = useState(q.answer.answerText);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Sync local draft when navigating to a different question.
   useEffect(() => {
@@ -78,7 +82,7 @@ function Slideshow({
         const updated = await recordAnswer(session.id, q.id, draft);
         onChange(updated);
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Save failed");
+        push(e instanceof Error ? e.message : "Save failed", "error");
         return;
       }
     }
@@ -90,7 +94,7 @@ function Slideshow({
         const updated = await reveal(session.id);
         onChange(updated);
       } catch (e) {
-        alert(e instanceof Error ? e.message : "Reveal failed");
+        push(e instanceof Error ? e.message : "Reveal failed", "error");
       }
     }
   }
@@ -103,6 +107,18 @@ function Slideshow({
       const inEditable =
         target.tagName === "TEXTAREA" ||
         (target.tagName === "INPUT" && (target as HTMLInputElement).type === "text");
+
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        setShowHelp((v) => !v);
+        return;
+      }
+      if (e.key === "Escape" && showHelp) {
+        e.preventDefault();
+        setShowHelp(false);
+        return;
+      }
+      if (showHelp) return; // pause shortcuts while overlay is open
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -132,8 +148,19 @@ function Slideshow({
             <span className="mx-2">·</span>
             <span className="text-fg">{session.quizTitle}</span>
           </div>
-          <div className="text-fg-muted">
-            Question <span className="text-fg">{idx + 1}</span> / {session.questions.length}
+          <div className="flex items-center gap-4 text-fg-muted">
+            <button
+              type="button"
+              onClick={() => setShowHelp(true)}
+              title="Show keyboard shortcuts (?)"
+              className="rounded-md border border-border bg-surface-muted px-2 py-1 text-fg-muted hover:text-fg"
+            >
+              ?
+            </button>
+            <ThemePicker compact />
+            <span>
+              Question <span className="text-fg">{idx + 1}</span> / {session.questions.length}
+            </span>
           </div>
         </div>
       </header>
@@ -207,6 +234,59 @@ function Slideshow({
           )}
         </div>
       </footer>
+
+      {showHelp && <KeyboardHelpOverlay last={last} onClose={() => setShowHelp(false)} />}
+    </div>
+  );
+}
+
+function KeyboardHelpOverlay({ last, onClose }: { last: boolean; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Keyboard shortcuts</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="close"
+            className="text-fg-muted hover:text-fg"
+          >
+            ×
+          </button>
+        </div>
+        <dl className="mt-4 space-y-2 text-sm">
+          <Shortcut keys={["Enter"]} desc={last ? "save and reveal answers" : "save and advance"} />
+          <Shortcut keys={["→"]} desc="next question" />
+          <Shortcut keys={["←"]} desc="previous question" />
+          <Shortcut keys={["Esc"]} desc="reveal (only on the final question)" />
+          <Shortcut keys={["?"]} desc="toggle this help" />
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+function Shortcut({ keys, desc }: { keys: string[]; desc: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-fg-muted">{desc}</span>
+      <span className="flex gap-1">
+        {keys.map((k) => (
+          <kbd
+            key={k}
+            className="rounded border border-border bg-surface-muted px-2 py-0.5 font-mono text-xs"
+          >
+            {k}
+          </kbd>
+        ))}
+      </span>
     </div>
   );
 }
@@ -222,6 +302,7 @@ function GradingScreen({
   session: SessionDto;
   onChange: (s: SessionDto) => void;
 }) {
+  const { push } = useToast();
   const [showTotal, setShowTotal] = useState(true);
   const allGraded = session.questions.every((q) => q.answer.isCorrect !== null);
 
@@ -245,7 +326,7 @@ function GradingScreen({
       const updated = await gradeAnswer(session.id, q.id, isCorrect, points, note);
       onChange(updated);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Grade failed");
+      push(e instanceof Error ? e.message : "Grade failed", "error");
     }
   }
 
@@ -253,8 +334,9 @@ function GradingScreen({
     try {
       const updated = await completeSession(session.id);
       onChange(updated);
+      push("Session graded.", "success");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Complete failed");
+      push(e instanceof Error ? e.message : "Complete failed", "error");
     }
   }
 
@@ -269,13 +351,16 @@ function GradingScreen({
             <span className="mx-2">·</span>
             <span>Reveal &amp; grade</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowTotal((v) => !v)}
-            className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg-muted hover:text-fg"
-          >
-            {showTotal ? "Hide total (T)" : "Show total (T)"}
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemePicker compact />
+            <button
+              type="button"
+              onClick={() => setShowTotal((v) => !v)}
+              className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg-muted hover:text-fg"
+            >
+              {showTotal ? "Hide total (T)" : "Show total (T)"}
+            </button>
+          </div>
         </div>
       </header>
 
@@ -427,6 +512,7 @@ function GradeRow({
 // ============================================================
 
 function CompletionScreen({ session }: { session: SessionDto }) {
+  const { push } = useToast();
   const [copied, setCopied] = useState(false);
   const shareUrl = `${window.location.origin}/share/${session.publicShareToken}`;
   const pct = session.maxScore > 0 ? Math.round((session.score / session.maxScore) * 100) : 0;
@@ -437,7 +523,7 @@ function CompletionScreen({ session }: { session: SessionDto }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      alert(shareUrl);
+      push(`Copy failed — link is: ${shareUrl}`, "info");
     }
   }
 
@@ -450,7 +536,10 @@ function CompletionScreen({ session }: { session: SessionDto }) {
             <span className="mx-2">·</span>
             <span className="text-fg">{session.quizTitle}</span>
           </div>
-          <span className="text-fg-muted">Done</span>
+          <div className="flex items-center gap-3">
+            <ThemePicker compact />
+            <span className="text-fg-muted">Done</span>
+          </div>
         </div>
       </header>
 
