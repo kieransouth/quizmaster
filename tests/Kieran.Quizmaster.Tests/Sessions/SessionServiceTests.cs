@@ -366,4 +366,101 @@ public class SessionServiceTests
         graded.Answer.IsCorrect.ShouldBe(true);
         graded.Answer.PointsAwarded.ShouldBe(1m);
     }
+
+    // ----- Public share lookup (Phase 8) -----
+
+    /// <summary>Plays a 2-question quiz to completion and returns the share token.</summary>
+    private static async Task<string> PlayToCompletionAsync(
+        SessionService sut, User owner, Quiz quiz, Guid mcId, Guid freeId,
+        string mcAnswer = "B", string freeAnswer = "Forty Two", decimal freePoints = 1m)
+    {
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+        await sut.RecordAnswerAsync(session!.Id, mcId,   owner.Id, new RecordAnswerRequest(mcAnswer),   default);
+        await sut.RecordAnswerAsync(session.Id,  freeId, owner.Id, new RecordAnswerRequest(freeAnswer), default);
+        await sut.RevealAsync(session.Id, owner.Id, default);
+        await sut.GradeAnswerAsync(session.Id, freeId, owner.Id,
+            new GradeAnswerRequest(freePoints > 0, freePoints, null), default);
+        await sut.CompleteAsync(session.Id, owner.Id, default);
+        return session.PublicShareToken;
+    }
+
+    [Fact]
+    public async Task GetByShareToken_returns_null_for_unknown_token()
+    {
+        using var db = new SqliteTestDb();
+        var (sut, _) = Build(db);
+
+        var summary = await sut.GetByShareTokenAsync("definitely-not-a-real-token", default);
+
+        summary.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetByShareToken_returns_null_while_session_is_in_progress()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, _, _) = SeedQuiz(db);
+        var (sut, _) = Build(db);
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+
+        var summary = await sut.GetByShareTokenAsync(session!.PublicShareToken, default);
+
+        summary.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetByShareToken_returns_null_while_awaiting_reveal()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId, _) = SeedQuiz(db);
+        var (sut, _) = Build(db);
+        var session = await sut.StartAsync(quiz.Id, owner.Id, default);
+        await sut.RecordAnswerAsync(session!.Id, mcId, owner.Id, new RecordAnswerRequest("B"), default);
+        await sut.RevealAsync(session.Id, owner.Id, default);
+
+        var summary = await sut.GetByShareTokenAsync(session.PublicShareToken, default);
+
+        summary.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task GetByShareToken_returns_full_summary_when_graded()
+    {
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId, freeId) = SeedQuiz(db);
+        var (sut, _) = Build(db);
+        var token = await PlayToCompletionAsync(sut, owner, quiz, mcId, freeId);
+
+        var summary = await sut.GetByShareTokenAsync(token, default);
+
+        summary.ShouldNotBeNull();
+        summary!.QuizTitle.ShouldBe("Test quiz");
+        summary.Score.ShouldBe(2m);
+        summary.MaxScore.ShouldBe(2);
+        summary.Questions.Count.ShouldBe(2);
+        summary.Questions.Select(q => q.Order).ShouldBe([0, 1]);
+        summary.Questions.Single(q => q.Type == "MultipleChoice").TeamAnswer.ShouldBe("B");
+        summary.Questions.Single(q => q.Type == "MultipleChoice").CorrectAnswer.ShouldBe("B");
+        summary.Questions.Single(q => q.Type == "MultipleChoice").IsCorrect.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task GetByShareToken_payload_does_not_leak_host_identity()
+    {
+        // Paranoid serialization check — the public DTO must not carry
+        // any host-identifying field. We round-trip through System.Text.Json
+        // to catch anything that snuck in via property additions.
+        using var db = new SqliteTestDb();
+        var (owner, quiz, mcId, freeId) = SeedQuiz(db);
+        var (sut, _) = Build(db);
+        var token = await PlayToCompletionAsync(sut, owner, quiz, mcId, freeId);
+
+        var summary = await sut.GetByShareTokenAsync(token, default);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(summary);
+        json.ShouldNotContain(owner.Id.ToString());
+        json.ShouldNotContain(owner.Email!);
+        json.ShouldNotContain(owner.DisplayName);
+        json.ShouldNotContain("HostUserId", Case.Insensitive);
+    }
 }

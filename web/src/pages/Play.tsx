@@ -465,9 +465,18 @@ function CompletionScreen({ session }: { session: SessionDto }) {
         </div>
 
         <div className="rounded-md border border-border bg-surface p-4">
-          <p className="text-sm text-fg-muted">Public share link (Phase 8 ships the viewer page):</p>
+          <p className="text-sm text-fg-muted">
+            Public share link — anyone can view the score without an account.
+          </p>
           <div className="mt-2 flex items-center gap-2">
-            <code className="flex-1 truncate rounded-md bg-surface-muted px-3 py-2 text-xs">{shareUrl}</code>
+            <a
+              href={`/share/${session.publicShareToken}`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex-1 truncate rounded-md bg-surface-muted px-3 py-2 font-mono text-xs hover:underline"
+            >
+              {shareUrl}
+            </a>
             <button
               type="button"
               onClick={copyShare}

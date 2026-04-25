@@ -200,6 +200,53 @@ public sealed class SessionService(ApplicationDbContext db, TimeProvider clock) 
             MaxScore:         maxScore);
     }
 
+    public async Task<PublicSessionSummaryDto?> GetByShareTokenAsync(string token, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        var session = await db.QuizSessions
+            .AsNoTracking()
+            .Include(s => s.Quiz!).ThenInclude(q => q.Topics)
+            .Include(s => s.Quiz!).ThenInclude(q => q.Questions)
+            .Include(s => s.Answers)
+            .FirstOrDefaultAsync(s => s.PublicShareToken == token, ct);
+
+        // Only Graded sessions are publicly visible — we don't leak
+        // in-progress or pre-reveal data through the share URL.
+        if (session is null || session.Status != SessionStatus.Graded) return null;
+
+        var quiz       = session.Quiz!;
+        var answersByQ = session.Answers.ToDictionary(a => a.QuestionId);
+
+        var questions = quiz.Questions
+            .OrderBy(q => q.Order)
+            .Select(q =>
+            {
+                var ans = answersByQ.GetValueOrDefault(q.Id);
+                return new PublicQuestionDto(
+                    Text:          q.Text,
+                    Type:          q.Type.Name,
+                    TeamAnswer:    ans?.AnswerText ?? string.Empty,
+                    CorrectAnswer: q.CorrectAnswer,
+                    IsCorrect:     ans?.IsCorrect ?? false,
+                    PointsAwarded: ans?.PointsAwarded ?? 0m,
+                    Order:         q.Order);
+            })
+            .ToList();
+
+        var topics = quiz.Topics
+            .Select(t => new TopicChip(t.Name, t.RequestedCount))
+            .ToList();
+
+        return new PublicSessionSummaryDto(
+            QuizTitle:   quiz.Title,
+            CompletedAt: session.CompletedAt!.Value,
+            Score:       session.Answers.Sum(a => a.PointsAwarded),
+            MaxScore:    quiz.Questions.Count,
+            Topics:      topics,
+            Questions:   questions);
+    }
+
     private static string GenerateShareToken()
     {
         Span<byte> bytes = stackalloc byte[16];

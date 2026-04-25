@@ -7,6 +7,7 @@ import NewQuiz from "./pages/NewQuiz";
 import Play from "./pages/Play";
 import QuizDetail from "./pages/QuizDetail";
 import Register from "./pages/Register";
+import SharedSession from "./pages/SharedSession";
 
 export default function App() {
   // Attempt to rehydrate the session via the refresh cookie on first load.
@@ -15,8 +16,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login"    element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login"        element={<Login />} />
+        <Route path="/register"     element={<Register />} />
+        {/* Public no-auth view of a completed session. */}
+        <Route path="/share/:token" element={<SharedSession />} />
         <Route
           path="/"
           element={
