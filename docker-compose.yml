@@ -38,7 +38,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
-      - "traefik.http.routers.quizmaster-api.rule=Host(`quizmaster.spicy.gg`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.quizmaster-api.rule=Host(`${QUIZMASTER_HOST}`) && PathPrefix(`/api`)"
       - "traefik.http.routers.quizmaster-api.entrypoints=websecure"
       - "traefik.http.routers.quizmaster-api.tls=true"
       - "traefik.http.middlewares.quizmaster-api-strip.stripprefix.prefixes=/api"
@@ -56,7 +56,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
-      - "traefik.http.routers.quizmaster-web.rule=Host(`quizmaster.spicy.gg`)"
+      - "traefik.http.routers.quizmaster-web.rule=Host(`${QUIZMASTER_HOST}`)"
       - "traefik.http.routers.quizmaster-web.entrypoints=websecure"
       - "traefik.http.routers.quizmaster-web.tls=true"
       - "traefik.http.services.quizmaster-web.loadbalancer.server.port=80"
