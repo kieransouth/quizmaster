@@ -42,6 +42,13 @@ public interface ISessionService
     /// answer is still ungraded (IsCorrect == null).
     /// </summary>
     Task<SessionResult> CompleteAsync(Guid sessionId, Guid hostUserId, CancellationToken ct);
+
+    /// <summary>
+    /// Public, no-auth lookup by per-session share token. Returns null when
+    /// the token is unknown OR the session isn't yet Graded — we never leak
+    /// in-progress sessions through the share URL.
+    /// </summary>
+    Task<PublicSessionSummaryDto?> GetByShareTokenAsync(string token, CancellationToken ct);
 }
 
 public abstract record SessionResult
