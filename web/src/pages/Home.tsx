@@ -2,18 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/store";
 import { listMyQuizzes, type QuizSummaryDto } from "../quizzes/api";
-import { applyTheme, getStoredTheme, type Theme } from "../theme";
+import { ThemePicker } from "../ui/ThemePicker";
 
 export default function Home() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
-  const [theme, setTheme] = useState<Theme>(getStoredTheme());
   const [quizzes, setQuizzes] = useState<QuizSummaryDto[] | "loading" | "error">("loading");
-
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +31,7 @@ export default function Home() {
           <h1 className="text-xl font-semibold tracking-tight">Quizmaster</h1>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-fg-muted">Hi, {user?.displayName}</span>
-            <ThemePicker value={theme} onChange={setTheme} />
+            <ThemePicker />
             <button
               onClick={onLogout}
               className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg hover:bg-surface"
@@ -63,11 +58,7 @@ export default function Home() {
           </Link>
         </div>
 
-        {quizzes === "loading" && (
-          <div className="rounded-md border border-border bg-surface p-10 text-center text-sm text-fg-muted">
-            loading…
-          </div>
-        )}
+        {quizzes === "loading" && <QuizListSkeleton />}
 
         {quizzes === "error" && (
           <div className="rounded-md border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-300">
@@ -76,9 +67,7 @@ export default function Home() {
         )}
 
         {Array.isArray(quizzes) && quizzes.length === 0 && (
-          <div className="rounded-md border border-dashed border-border p-10 text-center text-sm text-fg-muted">
-            No quizzes yet — click <span className="text-fg">New quiz</span> to make one.
-          </div>
+          <EmptyDashboard />
         )}
 
         {Array.isArray(quizzes) && quizzes.length > 0 && (
@@ -108,25 +97,39 @@ export default function Home() {
   );
 }
 
-function ThemePicker({
-  value,
-  onChange,
-}: {
-  value: Theme;
-  onChange: (t: Theme) => void;
-}) {
+function QuizListSkeleton() {
   return (
-    <label className="flex items-center gap-2 text-sm text-fg-muted">
-      Theme
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as Theme)}
-        className="rounded-md border border-border bg-surface-muted px-2 py-1 text-fg"
+    <ul className="space-y-2">
+      {[0, 1, 2].map((i) => (
+        <li
+          key={i}
+          className="flex items-center justify-between rounded-md border border-border bg-surface p-4"
+        >
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-1/3 animate-pulse rounded bg-surface-muted" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-surface-muted" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function EmptyDashboard() {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-surface p-12 text-center">
+      <p className="text-3xl">🎯</p>
+      <h3 className="mt-4 text-lg font-medium">No quizzes yet</h3>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-fg-muted">
+        Generate one with AI or import a quiz you found elsewhere — both
+        live as drafts you can edit, play, and share.
+      </p>
+      <Link
+        to="/quizzes/new"
+        className="mt-5 inline-block rounded-md bg-accent px-4 py-2 font-medium text-accent-fg"
       >
-        <option value="system">System</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
+        Make your first quiz
+      </Link>
+    </div>
   );
 }

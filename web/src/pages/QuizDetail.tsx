@@ -11,11 +11,14 @@ import {
   type UpdateQuestionRequest,
 } from "../quizzes/api";
 import { startSession } from "../sessions/api";
+import { ThemePicker } from "../ui/ThemePicker";
+import { useToast } from "../ui/toast";
 
 export default function QuizDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const providers = useProviders();
+  const { push } = useToast();
 
   const [quiz, setQuiz] = useState<QuizDetailDto | null | "loading" | "notfound">("loading");
   const [title, setTitle] = useState("");
@@ -106,7 +109,7 @@ export default function QuizDetail() {
         qs.map((existing) => (existing.id === q.id ? { ...updated, id: q.id, order: existing.order } : existing)),
       );
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Regenerate failed");
+      push(e instanceof Error ? e.message : "Regenerate failed", "error");
     }
   }
 
@@ -147,7 +150,7 @@ export default function QuizDetail() {
       await deleteQuiz(loaded.id);
       navigate("/", { replace: true });
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Delete failed");
+      push(e instanceof Error ? e.message : "Delete failed", "error");
     }
   }
 
@@ -166,6 +169,7 @@ export default function QuizDetail() {
           </h1>
           <div className="flex items-center gap-3 text-sm">
             {savingState === "saved" && <span className="text-fg-muted">saved</span>}
+            <ThemePicker compact />
             <button
               type="button"
               onClick={() => setShowAnswers((v) => !v)}
@@ -183,7 +187,7 @@ export default function QuizDetail() {
                     const s = await startSession(loaded.id);
                     navigate(`/play/${s.id}`);
                   } catch (e) {
-                    alert(e instanceof Error ? e.message : "Couldn't start session");
+                    push(e instanceof Error ? e.message : "Couldn't start session", "error");
                   }
                 }}
                 className="rounded-md border border-accent/60 bg-accent/10 px-3 py-1 font-medium text-accent hover:bg-accent/20 disabled:opacity-40"
