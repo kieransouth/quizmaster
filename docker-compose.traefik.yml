@@ -4,8 +4,9 @@
 #     docker compose -f docker-compose.yml -f docker-compose.traefik.yml up -d
 #
 # Assumes Traefik is already running on the external `web` network and has
-# a cert resolver registered as ${TRAEFIK_CERTRESOLVER}. Both vars are
-# required in .env when this overlay is in use.
+# a cert resolver registered as ${TRAEFIK_CERTRESOLVER}. Required vars in
+# .env when this overlay is in use: QUIZMASTER_HOST, TRAEFIK_CERTRESOLVER.
+# TRAEFIK_ENTRYPOINT is optional and defaults to "websecure".
 #
 # This overlay attaches the api and web services to the Traefik network and
 # adds the routing labels. Traefik routes /api/* to the api container
@@ -21,7 +22,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
       - "traefik.http.routers.quizmaster-api.rule=Host(`${QUIZMASTER_HOST}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.quizmaster-api.entrypoints=websecure"
+      - "traefik.http.routers.quizmaster-api.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.quizmaster-api.tls=true"
       - "traefik.http.routers.quizmaster-api.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.middlewares.quizmaster-api-strip.stripprefix.prefixes=/api"
@@ -36,7 +37,7 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=web"
       - "traefik.http.routers.quizmaster-web.rule=Host(`${QUIZMASTER_HOST}`)"
-      - "traefik.http.routers.quizmaster-web.entrypoints=websecure"
+      - "traefik.http.routers.quizmaster-web.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}"
       - "traefik.http.routers.quizmaster-web.tls=true"
       - "traefik.http.routers.quizmaster-web.tls.certresolver=${TRAEFIK_CERTRESOLVER}"
       - "traefik.http.services.quizmaster-web.loadbalancer.server.port=80"
