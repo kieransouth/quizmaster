@@ -68,9 +68,10 @@ public static class DependencyInjection
         services.AddSingleton<IAiChatClientFactory, AiChatClientFactory>();
 
         // Quiz generation pipeline (Phase 5)
-        services.AddScoped<IFactChecker,    FactChecker>();
-        services.AddScoped<IQuizGenerator,  QuizGenerator>();
-        services.AddScoped<IQuizImporter,   QuizImporter>();
+        services.AddScoped<IFactChecker,     FactChecker>();
+        services.AddScoped<IQuizGenerator,   QuizGenerator>();
+        services.AddScoped<IQuizImporter,    QuizImporter>();
+        services.AddScoped<IQuizJsonImporter, QuizJsonImporter>();
 
         // Quiz persistence + edit (Phase 6)
         services.AddScoped<IQuizService,             QuizService>();
