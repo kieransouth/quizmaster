@@ -1,3 +1,4 @@
+using Anthropic.SDK;
 using Kieran.Quizmaster.Application.Ai;
 using Kieran.Quizmaster.Application.Ai.Dtos;
 using Kieran.Quizmaster.Domain.Enumerations;
@@ -30,8 +31,7 @@ public sealed class AiChatClientFactory(IOptions<AiOptions> options) : IAiChatCl
         {
             1 /* Ollama */    => CreateOllama(cfg, model),
             2 /* OpenAI */    => CreateOpenAI(cfg, model),
-            3 /* Anthropic */ => throw new NotImplementedException(
-                "Anthropic adapter not yet wired."),
+            3 /* Anthropic */ => CreateAnthropic(cfg, model),
             _ => throw new InvalidOperationException($"Unknown provider value: {provider.Value}")
         };
     }
@@ -45,6 +45,21 @@ public sealed class AiChatClientFactory(IOptions<AiOptions> options) : IAiChatCl
         return new OpenAIClient(cfg.ApiKey)
             .GetChatClient(model)
             .AsIChatClient();
+    }
+
+    private static IChatClient CreateAnthropic(AiProviderConfig cfg, string model)
+    {
+        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
+            throw new InvalidOperationException(
+                "Anthropic provider requires an API key. Set Ai__Providers__Anthropic__ApiKey.");
+
+        // MessagesEndpoint implements IChatClient but reads ModelId from
+        // per-call ChatOptions. Wrap with a ChatClientBuilder that injects
+        // the configured model when callers don't supply one.
+        IChatClient inner = new AnthropicClient(cfg.ApiKey).Messages;
+        return new ChatClientBuilder(inner)
+            .ConfigureOptions(o => o.ModelId ??= model)
+            .Build();
     }
 
     public AiProvidersResponse GetAvailableProviders()

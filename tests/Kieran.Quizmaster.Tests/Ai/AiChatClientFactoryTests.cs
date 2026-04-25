@@ -95,6 +95,39 @@ public class AiChatClientFactoryTests
     }
 
     [Fact]
+    public void Create_for_Anthropic_throws_when_no_api_key()
+    {
+        var opts = DefaultOpts();
+        opts.Providers["Anthropic"] = new AiProviderConfig
+        {
+            Models = ["claude-opus-4-6"],
+        };
+        var sut = Build(opts);
+
+        var ex = Should.Throw<InvalidOperationException>(
+            () => sut.Create(AiProviderKind.Anthropic, "claude-opus-4-6"));
+
+        ex.Message.ShouldContain("Anthropic");
+        ex.Message.ShouldContain("API key");
+    }
+
+    [Fact]
+    public void Create_for_Anthropic_returns_chat_client_when_key_provided()
+    {
+        var opts = DefaultOpts();
+        opts.Providers["Anthropic"] = new AiProviderConfig
+        {
+            ApiKey = "sk-ant-test-not-real",
+            Models = ["claude-opus-4-6"],
+        };
+        var sut = Build(opts);
+
+        var client = sut.Create(AiProviderKind.Anthropic, "claude-opus-4-6");
+
+        client.ShouldBeAssignableTo<IChatClient>();
+    }
+
+    [Fact]
     public void GetAvailableProviders_returns_configured_providers_and_models()
     {
         var sut = Build(DefaultOpts());
