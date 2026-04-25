@@ -6,6 +6,7 @@ using Kieran.Quizmaster.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace Kieran.Quizmaster.Api.Controllers;
 
@@ -14,11 +15,25 @@ namespace Kieran.Quizmaster.Api.Controllers;
 public class AuthController(
     UserManager<User>     userManager,
     IJwtTokenService      jwt,
-    IRefreshTokenService  refreshTokens) : ControllerBase
+    IRefreshTokenService  refreshTokens,
+    IOptions<AuthOptions> authOptions) : ControllerBase
 {
+    [HttpGet("config")]
+    [AllowAnonymous]
+    public IActionResult Config() => Ok(new
+    {
+        registrationEnabled = authOptions.Value.RegistrationEnabled,
+    });
+
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken ct)
     {
+        if (!authOptions.Value.RegistrationEnabled)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { error = "Account registration is currently disabled." });
+        }
+
         if (string.IsNullOrWhiteSpace(request.Email) ||
             string.IsNullOrWhiteSpace(request.Password) ||
             string.IsNullOrWhiteSpace(request.DisplayName))

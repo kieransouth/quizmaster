@@ -31,6 +31,7 @@ services:
       Ai__Providers__Ollama__BaseUrl: "http://ollama:11434"
       Ai__Providers__OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
       Ai__Providers__Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
+      Auth__RegistrationEnabled: "${REGISTRATION_ENABLED:-true}"
     networks:
       - web
       - internal
