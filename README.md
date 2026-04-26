@@ -24,9 +24,6 @@ A live instance lives at **[quizmaster.spicy.gg](https://quizmaster.spicy.gg)** 
 ![Home](docs/screenshots/home.png)
 *Saved quizzes from your library — generated, imported, and BYO-AI sources side-by-side.*
 
-![New quiz](docs/screenshots/new-quiz-builder.png)
-*Topic builder with per-topic counts, MC/free-text mix, an optional second model for fact-checking, and questions streaming in as the model emits them.*
-
 ![Import](docs/screenshots/import.png)
 *Paste an existing quiz from anywhere — the AI extracts each Q+A into the schema. Or use **BYO AI** to skip the API call entirely: copy the prompt, run it in your tool of choice, paste the JSON back.*
 
