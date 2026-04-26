@@ -6,6 +6,7 @@ import {
   type PublicSessionSummary,
 } from "../sessions/sharedApi";
 import { ThemePicker } from "../ui/ThemePicker";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 
 export default function SharedSession() {
   const { token } = useParams<{ token: string }>();
@@ -15,6 +16,8 @@ export default function SharedSession() {
     | { kind: "error"; message: string }
     | { kind: "ok"; data: PublicSessionSummary }
   >(() => (token ? { kind: "loading" } : { kind: "notfound" }));
+
+  useDocumentTitle(state.kind === "ok" ? state.data.quizTitle : null);
 
   useEffect(() => {
     if (!token) return;

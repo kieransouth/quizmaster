@@ -1,0 +1,6 @@
+# Self-hosted Quizmaster instances are private by default — disallow
+# all crawlers. The official live deploy at quizmaster.spicy.gg
+# overrides this file with a permissive version (e.g. via a docker
+# volume mount or a build-time replacement).
+User-agent: *
+Disallow: /

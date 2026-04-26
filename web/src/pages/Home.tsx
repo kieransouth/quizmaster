@@ -4,8 +4,10 @@ import { useAuthStore } from "../auth/store";
 import { listMyQuizzes, type QuizSummaryDto } from "../quizzes/api";
 import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 
 export default function Home() {
+  useDocumentTitle("Dashboard");
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);

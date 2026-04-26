@@ -4,6 +4,7 @@ import { apiFetch } from "../api/client";
 import type { UserApiKeyStatus } from "../ai/types";
 import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import { useToast } from "../ui/toast";
 
 type LoadState =
@@ -12,6 +13,7 @@ type LoadState =
   | { kind: "error"; message: string };
 
 export default function Settings() {
+  useDocumentTitle("Settings");
   const { push } = useToast();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
 

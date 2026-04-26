@@ -69,5 +69,11 @@ web/.vite/
 .env
 .env.*.local
 
+# Vite reads `web/.env` at build time — we want the default
+# VITE_ROBOTS=noindex,nofollow committed so a fresh `npm run build`
+# bakes safe defaults without any host-side wiring. The .env at the
+# repo root (host secrets / docker config) stays ignored.
+!web/.env
+
 # Misc
 .DS_Store
