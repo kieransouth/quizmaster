@@ -59,7 +59,7 @@ export default function SharedSession() {
     <div className="min-h-full">
       <header className="border-b border-border bg-surface">
         <div className="mx-auto flex max-w-3xl items-center justify-end px-6 py-3">
-          <ThemePicker compact />
+          <ThemePicker />
         </div>
       </header>
       <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
