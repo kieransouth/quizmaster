@@ -21,23 +21,39 @@ A live instance lives at **[quizmaster.spicy.gg](https://quizmaster.spicy.gg)** 
 
 ## It looks like
 
-![Home](docs/screenshots/home.png)
-*Saved quizzes from your library — generated, imported, and BYO-AI sources side-by-side.*
-
-![Import](docs/screenshots/import.png)
-*Paste an existing quiz from anywhere — the AI extracts each Q+A into the schema. Or use **BYO AI** to skip the API call entirely: copy the prompt, run it in your tool of choice, paste the JSON back.*
-
-![Fact check](docs/screenshots/fact-check.png)
-*A separately-chosen model audits each question; flagged ones surface the disagreement so the host can fix them before play.*
-
-![Play](docs/screenshots/play.png)
-*Slideshow play view, keyboard-first — 1–9 to pick, Enter to save and next, ←/→ to navigate.*
-
-![Reveal & grade](docs/screenshots/reveal.png)
-*Every team's answers side-by-side with the canonical answer, auto-graded with a manual override on the spot.*
-
-![Public share](docs/screenshots/share.png)
-*A read-only summary teams can revisit after the quiz.*
+<!-- Click any thumbnail to view full size. -->
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/screenshots/home.png"><img src="docs/screenshots/home.png" alt="Home" width="100%"/></a>
+      <br/><sub><b>Home</b> — saved quizzes side-by-side: generated, imported, BYO-AI.</sub>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/screenshots/import.png"><img src="docs/screenshots/import.png" alt="Import" width="100%"/></a>
+      <br/><sub><b>Import</b> — AI extracts Q+A from any pasted quiz. Or BYO AI: copy prompt, paste JSON back.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/fact-check.png"><img src="docs/screenshots/fact-check.png" alt="Fact check" width="100%"/></a>
+      <br/><sub><b>Fact-check</b> — a separately-chosen model audits each question; disagreements surface inline.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/play.png"><img src="docs/screenshots/play.png" alt="Play" width="100%"/></a>
+      <br/><sub><b>Play</b> — keyboard-first slideshow. 1–9 to pick, Enter to save and next, ←/→ to navigate.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/reveal.png"><img src="docs/screenshots/reveal.png" alt="Reveal & grade" width="100%"/></a>
+      <br/><sub><b>Reveal &amp; grade</b> — every team's answers next to the canonical, auto-graded with a manual override.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/share.png"><img src="docs/screenshots/share.png" alt="Public share" width="100%"/></a>
+      <br/><sub><b>Public share</b> — a read-only summary teams can revisit after the quiz.</sub>
+    </td>
+  </tr>
+</table>
 
 ## You can host it
 
