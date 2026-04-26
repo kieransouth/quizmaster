@@ -9,6 +9,9 @@ An AI-powered quiz wizard for team trivia nights — pick your provider, pick yo
 ## It's useful because
 Writing a pub quiz from scratch takes an evening; doing it with any LLM takes thirty seconds. Quizmaster wraps that around a host UI so you can edit the dodgy questions, fact-check them with a second model, run a slideshow on a Discord screen-share, and grade on the spot.
 
+## It's also running
+A live instance lives at **[quizmaster.spicy.gg](https://quizmaster.spicy.gg)** — same code as this repo, not a hosted demo. Sign in, drop your OpenAI / Anthropic key into Settings (encrypted at rest, never visible to other users), and host a quiz. If you'd rather not provide a key at all, the BYO-AI flow lets you generate and fact-check entirely in your own AI tool of choice and just paste the JSON back.
+
 ## It's built with
 - ASP.NET Core 10 + EF Core (Postgres)
 - React + TypeScript + Vite + Tailwind v4
@@ -48,11 +51,13 @@ Pick whichever overlay fits your setup.
 ```bash
 gh repo clone kieransouth/quizmaster && cd quizmaster
 cp .env.example .env
-# fill in POSTGRES_PASSWORD, JWT_SIGNING_KEY, AI provider keys, WEB_PORT
+# fill in POSTGRES_PASSWORD, JWT_SIGNING_KEY, WEB_PORT
 docker compose -f docker-compose.yml -f docker-compose.standalone.yml up -d --build
 ```
 
 The web UI is published on `127.0.0.1:${WEB_PORT}` (default `8080`) and the web container reverse-proxies `/api` to the API, so a single host port serves the whole app. Point Caddy / nginx / Cloudflare Tunnel at it.
+
+OpenAI and Anthropic keys are **per-user** — log in and add yours from the Settings page; they're encrypted at rest with ASP.NET Data Protection. Ollama is the one provider Quizmaster shares server-wide; set `OLLAMA_ENABLED=false` in `.env` to hide it on a public deploy.
 
 ### Option B — Traefik (label-routed)
 
