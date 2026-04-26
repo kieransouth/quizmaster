@@ -1,0 +1,46 @@
+name: Bug report
+description: Something Quizmaster does that it shouldn't
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A short description of the bug. Stack traces / network errors welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Steps to make it happen again.
+      placeholder: |
+        1. Go to '...'
+        2. Click '...'
+        3. See error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: false
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running Quizmaster?
+      options:
+        - Local dev (dev.sh / dev.bat)
+        - Docker, standalone overlay
+        - Docker, Traefik overlay
+        - Other (please describe in 'What happened?')
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: AI provider + model in use
+      placeholder: e.g. Anthropic / claude-sonnet-4-6
+    validations:
+      required: false

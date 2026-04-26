@@ -14,13 +14,10 @@ export default function SharedSession() {
     | { kind: "notfound" }
     | { kind: "error"; message: string }
     | { kind: "ok"; data: PublicSessionSummary }
-  >({ kind: "loading" });
+  >(() => (token ? { kind: "loading" } : { kind: "notfound" }));
 
   useEffect(() => {
-    if (!token) {
-      setState({ kind: "notfound" });
-      return;
-    }
+    if (!token) return;
     let cancelled = false;
     (async () => {
       try {
