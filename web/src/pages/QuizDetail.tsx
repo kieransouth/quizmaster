@@ -133,6 +133,8 @@ export default function QuizDetail() {
           options: q.options ?? null,
           explanation: q.explanation ?? null,
           order: q.order,
+          factCheckFlagged: q.factCheckFlagged,
+          factCheckNote: q.factCheckNote ?? null,
         })),
       };
       await updateQuiz(loaded.id, body);
