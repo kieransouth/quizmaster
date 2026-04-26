@@ -178,7 +178,7 @@ export default function QuizDetail() {
           </h1>
           <div className="flex items-center gap-3 text-sm">
             {savingState === "saved" && <span className="text-fg-muted">saved</span>}
-            <ThemePicker compact />
+            <ThemePicker />
             <button
               type="button"
               onClick={() => setShowAnswers((v) => !v)}

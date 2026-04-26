@@ -75,7 +75,7 @@ export default function Settings() {
             <span>·</span>
             <span className="text-fg">Settings</span>
           </div>
-          <ThemePicker compact />
+          <ThemePicker />
         </div>
       </header>
 

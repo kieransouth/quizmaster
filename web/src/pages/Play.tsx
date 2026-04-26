@@ -179,7 +179,7 @@ function Slideshow({
             >
               ?
             </button>
-            <ThemePicker compact />
+            <ThemePicker />
             <span>
               Question <span className="text-fg">{idx + 1}</span> / {session.questions.length}
             </span>
@@ -399,7 +399,7 @@ function GradingScreen({
             <span>Reveal &amp; grade</span>
           </div>
           <div className="flex items-center gap-3">
-            <ThemePicker compact />
+            <ThemePicker />
             <button
               type="button"
               onClick={() => setShowTotal((v) => !v)}
@@ -584,7 +584,7 @@ function CompletionScreen({ session }: { session: SessionDto }) {
             <span className="text-fg">{session.quizTitle}</span>
           </div>
           <div className="flex items-center gap-3">
-            <ThemePicker compact />
+            <ThemePicker />
             <span className="text-fg-muted">Done</span>
           </div>
         </div>
