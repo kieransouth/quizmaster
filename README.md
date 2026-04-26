@@ -1,5 +1,8 @@
 # Quizmaster
 
+[![build](https://github.com/kieransouth/quizmaster/actions/workflows/build.yml/badge.svg)](https://github.com/kieransouth/quizmaster/actions/workflows/build.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 ## It's
 An AI-powered quiz wizard for team trivia nights — pick your provider, pick your topics, host the quiz from your browser.
 
