@@ -116,9 +116,14 @@ public sealed class UserApiKeyService : IUserApiKeyService
                 $"Provider '{provider}' is not configured or is disabled on this server.");
     }
 
-    /// <summary>Show the last 4 chars; everything else as •.</summary>
+    /// <summary>
+    /// Show a fixed-width preview: four bullets + the last four chars
+    /// (e.g. <c>••••aBcD</c>). Bullet count doesn't track real key length —
+    /// Anthropic keys are 108 chars, and rendering 100+ bullets in the
+    /// Settings UI overflows the row and pushes the buttons off-screen.
+    /// </summary>
     private static string Mask(string plaintext) =>
         plaintext.Length <= 4
             ? new string('•', plaintext.Length)
-            : new string('•', plaintext.Length - 4) + plaintext[^4..];
+            : "••••" + plaintext[^4..];
 }
