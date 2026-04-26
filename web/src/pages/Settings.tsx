@@ -146,10 +146,10 @@ function ProviderRow({
 
   return (
     <li className="rounded-md border border-border bg-surface p-4">
-      <div className="flex items-baseline justify-between">
-        <div>
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <div className="font-medium">{status.provider}</div>
-          <div className="mt-1 text-xs text-fg-muted">
+          <div className="mt-1 truncate text-xs text-fg-muted">
             {isOllama
               ? "Server-shared. No key required."
               : status.hasKey
