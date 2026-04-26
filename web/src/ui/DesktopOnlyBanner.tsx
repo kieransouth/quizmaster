@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 
 const STORAGE_KEY = "qm-desktop-banner-dismissed";
 
@@ -6,11 +7,17 @@ const STORAGE_KEY = "qm-desktop-banner-dismissed";
  * Shows a tiny banner on screens narrower than the lg breakpoint
  * suggesting that hosting/play works best on desktop. Dismissable —
  * the choice persists in localStorage.
+ *
+ * Skipped entirely on the public share route: the share page is a
+ * read-only summary teams revisit on their phones, where the desktop
+ * caveat doesn't apply.
  */
 export function DesktopOnlyBanner() {
+  const { pathname } = useLocation();
   const [dismissed, setDismissed] = useState(
     () => typeof window !== "undefined" && window.localStorage.getItem(STORAGE_KEY) === "1",
   );
+  if (pathname.startsWith("/share/")) return null;
   if (dismissed) return null;
 
   function dismiss() {
