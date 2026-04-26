@@ -9,6 +9,7 @@ import {
   type SessionDto,
   type SessionQuestionDto,
 } from "../sessions/api";
+import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
 import { useToast } from "../ui/toast";
 
@@ -180,6 +181,7 @@ function Slideshow({
               ?
             </button>
             <ThemePicker />
+            <GithubLink />
             <span>
               Question <span className="text-fg">{idx + 1}</span> / {session.questions.length}
             </span>
@@ -400,6 +402,7 @@ function GradingScreen({
           </div>
           <div className="flex items-center gap-3">
             <ThemePicker />
+            <GithubLink />
             <button
               type="button"
               onClick={() => setShowTotal((v) => !v)}
@@ -585,6 +588,7 @@ function CompletionScreen({ session }: { session: SessionDto }) {
           </div>
           <div className="flex items-center gap-3">
             <ThemePicker />
+            <GithubLink />
             <span className="text-fg-muted">Done</span>
           </div>
         </div>

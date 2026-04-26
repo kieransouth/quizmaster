@@ -5,6 +5,7 @@ import { factCheckDraftAi, factCheckDraftJson, saveQuiz } from "../quizzes/api";
 import { useGenerationStream } from "../quizzes/useGenerationStream";
 import { buildGenerationPrompt } from "../quizzes/promptTemplate";
 import { FactCheckPanel } from "../quizzes/FactCheckPanel";
+import { GithubLink } from "../ui/GithubLink";
 import type {
   DraftQuestion,
   GenerateQuizRequest,
@@ -161,6 +162,7 @@ export default function NewQuiz() {
             <Link to="/">Quizmaster</Link>
             <span className="text-fg-muted"> / new quiz</span>
           </h1>
+          <GithubLink />
         </div>
       </header>
 

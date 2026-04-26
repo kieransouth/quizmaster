@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../api/client";
 import type { UserApiKeyStatus } from "../ai/types";
+import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
 import { useToast } from "../ui/toast";
 
@@ -75,7 +76,10 @@ export default function Settings() {
             <span>·</span>
             <span className="text-fg">Settings</span>
           </div>
-          <ThemePicker />
+          <div className="flex items-center gap-2">
+            <ThemePicker />
+            <GithubLink />
+          </div>
         </div>
       </header>
 
