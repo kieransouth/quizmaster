@@ -2,9 +2,11 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/store";
 import type { TokenPair } from "../auth/types";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import { AuthShell, Field } from "./Login";
 
 export default function Register() {
+  useDocumentTitle("Create account");
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const registrationEnabled = useAuthStore((s) => s.registrationEnabled);

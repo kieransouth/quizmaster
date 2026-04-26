@@ -16,6 +16,7 @@ import { FactCheckPanel } from "../quizzes/FactCheckPanel";
 import { startSession } from "../sessions/api";
 import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import { useToast } from "../ui/toast";
 
 export default function QuizDetail() {
@@ -29,6 +30,9 @@ export default function QuizDetail() {
   const [questions, setQuestions] = useState<QuestionDto[]>([]);
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
+
+  // Tab label tracks the editable title — updates live as the host types.
+  useDocumentTitle(title);
 
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);

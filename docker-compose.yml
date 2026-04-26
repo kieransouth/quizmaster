@@ -49,6 +49,11 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
+      args:
+        # Defaults to noindex,nofollow so self-hosted private deploys
+        # don't leak into search results. Set WEB_ROBOTS=index,follow
+        # in .env to opt in.
+        WEB_ROBOTS: "${WEB_ROBOTS:-noindex,nofollow}"
     container_name: quizmaster-web
     restart: unless-stopped
     depends_on:

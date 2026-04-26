@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/store";
 import type { TokenPair } from "../auth/types";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 
 export default function Login() {
+  useDocumentTitle("Sign in");
   const navigate = useNavigate();
   const setAuth = useAuthStore((s) => s.setAuth);
   const registrationEnabled = useAuthStore((s) => s.registrationEnabled);

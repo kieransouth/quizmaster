@@ -8,6 +8,13 @@ COPY web/package.json web/package-lock.json* ./
 RUN npm ci
 
 COPY web/ ./
+
+# Indexability default — self-hosted private deploys stay out of search
+# engines. The live deploy passes `--build-arg WEB_ROBOTS=index,follow`
+# (wired through docker-compose.yml from the WEB_ROBOTS .env value).
+ARG WEB_ROBOTS=noindex,nofollow
+ENV VITE_ROBOTS=$WEB_ROBOTS
+
 RUN npm run build
 
 # ---------- runtime ----------

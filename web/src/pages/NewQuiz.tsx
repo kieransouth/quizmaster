@@ -6,6 +6,7 @@ import { useGenerationStream } from "../quizzes/useGenerationStream";
 import { buildGenerationPrompt } from "../quizzes/promptTemplate";
 import { FactCheckPanel } from "../quizzes/FactCheckPanel";
 import { GithubLink } from "../ui/GithubLink";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import type {
   DraftQuestion,
   GenerateQuizRequest,
@@ -17,6 +18,7 @@ import type {
 type Mode = "generate" | "import" | "byo";
 
 export default function NewQuiz() {
+  useDocumentTitle("New quiz");
   const navigate = useNavigate();
   const providers = useProviders();
   const stream = useGenerationStream();

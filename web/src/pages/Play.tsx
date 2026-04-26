@@ -11,6 +11,7 @@ import {
 } from "../sessions/api";
 import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
+import { useDocumentTitle } from "../ui/useDocumentTitle";
 import { useToast } from "../ui/toast";
 
 export default function Play() {
@@ -67,6 +68,8 @@ function Slideshow({
   const [idx, setIdx] = useState(0);
   const q = session.questions[idx];
   const last = idx === session.questions.length - 1;
+
+  useDocumentTitle(`${session.quizTitle} · Q${idx + 1} / ${session.questions.length}`);
 
   const [draft, setDraft] = useState(q.answer.answerText);
   const [showHelp, setShowHelp] = useState(false);
@@ -351,6 +354,7 @@ function GradingScreen({
   session: SessionDto;
   onChange: (s: SessionDto) => void;
 }) {
+  useDocumentTitle(`${session.quizTitle} · Reveal`);
   const { push } = useToast();
   const [showTotal, setShowTotal] = useState(true);
   const allGraded = session.questions.every((q) => q.answer.isCorrect !== null);
@@ -562,6 +566,7 @@ function GradeRow({
 // ============================================================
 
 function CompletionScreen({ session }: { session: SessionDto }) {
+  useDocumentTitle(`${session.quizTitle} · Done`);
   const { push } = useToast();
   const [copied, setCopied] = useState(false);
   const shareUrl = `${window.location.origin}/share/${session.publicShareToken}`;
