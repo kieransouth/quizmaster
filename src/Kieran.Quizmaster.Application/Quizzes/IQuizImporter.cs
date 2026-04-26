@@ -9,6 +9,7 @@ public interface IQuizImporter
     /// using the same event vocabulary as <see cref="IQuizGenerator"/>.
     /// </summary>
     IAsyncEnumerable<GenerationEvent> ImportAsync(
+        Guid              userId,
         ImportQuizRequest request,
         CancellationToken cancellationToken);
 }

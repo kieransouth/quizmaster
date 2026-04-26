@@ -28,18 +28,17 @@ if docker start qm-test-ollama >/dev/null 2>&1; then
   echo "Ollama   : started"
 fi
 
-# -------- 3. Read provider keys + auth toggles from .env --------
+# -------- 3. Read auth toggles from .env --------
+# Cloud AI keys (OpenAI, Anthropic) are per-user now; save them in the
+# Settings page once the dev server is up.
 if [[ -f .env ]]; then
   set -a
   # shellcheck disable=SC1091
   source .env
   set +a
 
-  [[ -n "${OPENAI_API_KEY:-}"       ]] && export Ai__Providers__OpenAI__ApiKey="$OPENAI_API_KEY"
-  [[ -n "${ANTHROPIC_API_KEY:-}"    ]] && export Ai__Providers__Anthropic__ApiKey="$ANTHROPIC_API_KEY"
   [[ -n "${REGISTRATION_ENABLED:-}" ]] && export Auth__RegistrationEnabled="$REGISTRATION_ENABLED"
-else
-  echo ".env not found - paid providers won't work without their API keys."
+  [[ -n "${OLLAMA_ENABLED:-}"       ]] && export Ai__Providers__Ollama__Enabled="$OLLAMA_ENABLED"
 fi
 
 # -------- 4 & 5. API + Vite --------

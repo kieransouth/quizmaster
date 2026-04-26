@@ -31,6 +31,9 @@ export default function Home() {
           <h1 className="text-xl font-semibold tracking-tight">Quizmaster</h1>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-fg-muted">Hi, {user?.displayName}</span>
+            <Link to="/settings" className="text-fg-muted hover:text-fg">
+              Settings
+            </Link>
             <ThemePicker />
             <button
               onClick={onLogout}

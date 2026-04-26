@@ -33,9 +33,15 @@ services:
       Ai__DefaultProvider: "Ollama"
       Ai__DefaultModel: "${OLLAMA_DEFAULT_MODEL}"
       Ai__Providers__Ollama__BaseUrl: "http://ollama:11434"
-      Ai__Providers__OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
-      Ai__Providers__Anthropic__ApiKey: "${ANTHROPIC_API_KEY:-}"
+      Ai__Providers__Ollama__Enabled: "${OLLAMA_ENABLED:-true}"
+      # Cloud-provider API keys are per-user (saved via the Settings page,
+      # encrypted at rest). The server does not hold any cloud keys.
       Auth__RegistrationEnabled: "${REGISTRATION_ENABLED:-true}"
+      # Persistent key ring for ASP.NET Core Data Protection. Without this
+      # mount, every container restart invalidates every saved user API key.
+      DataProtection__KeyRingPath: "/var/lib/quizmaster/dataprotection-keys"
+    volumes:
+      - dataprotection-keys:/var/lib/quizmaster/dataprotection-keys
     networks:
       - internal
 
@@ -89,3 +95,4 @@ networks:
 volumes:
   postgres-data:
   ollama-data:
+  dataprotection-keys:
