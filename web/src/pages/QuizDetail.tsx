@@ -14,6 +14,7 @@ import {
 } from "../quizzes/api";
 import { FactCheckPanel } from "../quizzes/FactCheckPanel";
 import { startSession } from "../sessions/api";
+import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
 import { useToast } from "../ui/toast";
 
@@ -179,6 +180,7 @@ export default function QuizDetail() {
           <div className="flex items-center gap-3 text-sm">
             {savingState === "saved" && <span className="text-fg-muted">saved</span>}
             <ThemePicker />
+            <GithubLink />
             <button
               type="button"
               onClick={() => setShowAnswers((v) => !v)}
