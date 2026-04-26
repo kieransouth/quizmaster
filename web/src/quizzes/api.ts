@@ -43,6 +43,9 @@ export interface UpdateQuestionRequest {
   options?: string[] | null;
   explanation?: string | null;
   order: number;
+  /** Round-tripped so regenerate-then-save clears stale fact-check flags. */
+  factCheckFlagged: boolean;
+  factCheckNote?: string | null;
 }
 
 export interface UpdateQuizRequest {

@@ -174,6 +174,61 @@ public class QuizServiceTests
     }
 
     [Fact]
+    public async Task Update_round_trips_fact_check_flags()
+    {
+        // Regression for "fact-check hangs around after regenerate": the editor
+        // sends factCheckFlagged=false on a regenerated question, but the old
+        // UpdateQuestionRequest didn't carry the field so the DB row kept
+        // its stale flagged=true.
+        using var db = new SqliteTestDb();
+        var user = SeedUser(db);
+        var (sut, _) = BuildSut(db);
+        var id = await sut.SaveAsync(GeneratedDraft(), user.Id, default);
+
+        // Stamp both questions as flagged with notes so the baseline isn't false.
+        var loaded = await db.Db.Quizzes.Include(q => q.Questions).SingleAsync(q => q.Id == id);
+        foreach (var q in loaded.Questions)
+        {
+            q.FactCheckFlagged = true;
+            q.FactCheckNote    = "stale note";
+        }
+        await db.Db.SaveChangesAsync();
+
+        var detail = (await sut.GetByIdAsync(id, user.Id, default))!;
+
+        // Save with flag=false on one question, flag=true on the other.
+        var ok = await sut.UpdateAsync(id, user.Id, new UpdateQuizRequest(
+            Title: detail.Title,
+            Questions: [
+                new UpdateQuestionRequest(
+                    detail.Questions[0].Id,
+                    detail.Questions[0].Text,
+                    detail.Questions[0].CorrectAnswer,
+                    detail.Questions[0].Options,
+                    detail.Questions[0].Explanation,
+                    detail.Questions[0].Order,
+                    FactCheckFlagged: false,
+                    FactCheckNote:    null),
+                new UpdateQuestionRequest(
+                    detail.Questions[1].Id,
+                    detail.Questions[1].Text,
+                    detail.Questions[1].CorrectAnswer,
+                    detail.Questions[1].Options,
+                    detail.Questions[1].Explanation,
+                    detail.Questions[1].Order,
+                    FactCheckFlagged: true,
+                    FactCheckNote:    "kept"),
+            ]), default);
+
+        ok.ShouldBeTrue();
+        var after = (await sut.GetByIdAsync(id, user.Id, default))!;
+        after.Questions[0].FactCheckFlagged.ShouldBeFalse();
+        after.Questions[0].FactCheckNote.ShouldBeNull();
+        after.Questions[1].FactCheckFlagged.ShouldBeTrue();
+        after.Questions[1].FactCheckNote.ShouldBe("kept");
+    }
+
+    [Fact]
     public async Task Update_returns_false_when_caller_does_not_own_quiz()
     {
         using var db = new SqliteTestDb();

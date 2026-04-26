@@ -124,11 +124,13 @@ public sealed class QuizService(ApplicationDbContext db, TimeProvider clock) : I
         foreach (var u in request.Questions)
         {
             if (!byId.TryGetValue(u.Id, out var existing)) continue; // unknown id — ignore
-            existing.Text          = u.Text;
-            existing.CorrectAnswer = u.CorrectAnswer;
-            existing.OptionsJson   = u.Options is null ? null : JsonSerializer.Serialize(u.Options);
-            existing.Explanation   = u.Explanation;
-            existing.Order         = u.Order;
+            existing.Text             = u.Text;
+            existing.CorrectAnswer    = u.CorrectAnswer;
+            existing.OptionsJson      = u.Options is null ? null : JsonSerializer.Serialize(u.Options);
+            existing.Explanation      = u.Explanation;
+            existing.Order            = u.Order;
+            existing.FactCheckFlagged = u.FactCheckFlagged;
+            existing.FactCheckNote    = u.FactCheckNote;
         }
 
         await db.SaveChangesAsync(ct);

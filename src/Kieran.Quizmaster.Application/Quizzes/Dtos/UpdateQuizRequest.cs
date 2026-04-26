@@ -16,4 +16,11 @@ public sealed record UpdateQuestionRequest(
     string CorrectAnswer,
     IReadOnlyList<string>? Options,
     string? Explanation,
-    int Order);
+    int Order,
+    /// <summary>
+    /// Round-trips fact-check state from the editor. Regenerating a question
+    /// clears these locally; without persisting them on save, the DB row
+    /// keeps stale flags from a previous fact-check pass.
+    /// </summary>
+    bool FactCheckFlagged = false,
+    string? FactCheckNote = null);
