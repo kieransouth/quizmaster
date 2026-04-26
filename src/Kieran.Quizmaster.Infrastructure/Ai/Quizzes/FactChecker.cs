@@ -15,6 +15,7 @@ public sealed class FactChecker(IAiChatClientFactory factory) : IFactChecker
     };
 
     public async Task<DraftQuiz> CheckAsync(
+        Guid              userId,
         DraftQuiz         draft,
         AiProviderKind    provider,
         string            model,
@@ -22,7 +23,7 @@ public sealed class FactChecker(IAiChatClientFactory factory) : IFactChecker
     {
         if (draft.Questions.Count == 0) return draft;
 
-        var client   = factory.Create(provider, model);
+        var client   = await factory.CreateAsync(userId, provider, model, cancellationToken);
         var prompt   = Prompts.FactCheck(draft.Questions);
         var response = await client.GetResponseAsync(
             [new ChatMessage(ChatRole.User, prompt)],

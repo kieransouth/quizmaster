@@ -8,3 +8,10 @@ export interface AiProvidersResponse {
   defaultModel: string;
   providers: AiProviderInfo[];
 }
+
+export interface UserApiKeyStatus {
+  provider: string;
+  hasKey: boolean;
+  /** Last few characters of the stored key, or null when unset. */
+  masked: string | null;
+}

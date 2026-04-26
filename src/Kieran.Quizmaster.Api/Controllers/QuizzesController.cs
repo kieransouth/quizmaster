@@ -30,7 +30,12 @@ public class QuizzesController(
         CancellationToken              cancellationToken)
     {
         Response.EnableSse();
-        await foreach (var evt in generator.GenerateAsync(request, cancellationToken))
+        if (!TryGetUserId(out var userId))
+        {
+            await Response.WriteEventAsync(new GenerationEvent.Error("Unauthorized.", false), cancellationToken);
+            return;
+        }
+        await foreach (var evt in generator.GenerateAsync(userId, request, cancellationToken))
         {
             await Response.WriteEventAsync(evt, cancellationToken);
         }
@@ -46,7 +51,12 @@ public class QuizzesController(
         CancellationToken            cancellationToken)
     {
         Response.EnableSse();
-        await foreach (var evt in importer.ImportAsync(request, cancellationToken))
+        if (!TryGetUserId(out var userId))
+        {
+            await Response.WriteEventAsync(new GenerationEvent.Error("Unauthorized.", false), cancellationToken);
+            return;
+        }
+        await foreach (var evt in importer.ImportAsync(userId, request, cancellationToken))
         {
             await Response.WriteEventAsync(evt, cancellationToken);
         }

@@ -11,12 +11,15 @@ namespace Kieran.Quizmaster.Tests.Quizzes;
 
 public class QuizGeneratorTests
 {
+    private static readonly Guid TestUser = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
     private static (QuizGenerator Sut, IChatClient Client, IFactChecker FactChecker) Build()
     {
         var factory = Substitute.For<IAiChatClientFactory>();
         var client  = Substitute.For<IChatClient>();
         var checker = Substitute.For<IFactChecker>();
-        factory.Create(Arg.Any<AiProviderKind>(), Arg.Any<string>()).Returns(client);
+        factory.CreateAsync(Arg.Any<Guid>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(client);
         return (new QuizGenerator(factory, checker), client, checker);
     }
 
@@ -69,7 +72,7 @@ public class QuizGeneratorTests
         }
         """);
 
-        var events = await Drain(sut.GenerateAsync(StarWars(2), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(2), default));
 
         events.OfType<GenerationEvent.Status>().Select(s => s.Stage)
               .ShouldContain("generating");
@@ -90,7 +93,7 @@ public class QuizGeneratorTests
             ",{\"topic\":\"Star Wars\",\"text\":\"Q2\",\"type\":\"FreeText\",",
             "\"correctAnswer\":\"A2\",\"options\":null,\"explanation\":null}]}");
 
-        var events = await Drain(sut.GenerateAsync(StarWars(2), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(2), default));
 
         events.OfType<GenerationEvent.Question>().Count().ShouldBe(2);
         events.OfType<GenerationEvent.Question>().Select(q => q.Item.Text).ShouldBe(["Q1", "Q2"]);
@@ -102,7 +105,7 @@ public class QuizGeneratorTests
         var (sut, _, _) = Build();
         var req = StarWars() with { Provider = "DefinitelyNotAProvider" };
 
-        var events = await Drain(sut.GenerateAsync(req, default));
+        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
 
         var err = events.Last().ShouldBeOfType<GenerationEvent.Error>();
         err.Retryable.ShouldBeFalse();
@@ -115,11 +118,11 @@ public class QuizGeneratorTests
     {
         var factory = Substitute.For<IAiChatClientFactory>();
         var checker = Substitute.For<IFactChecker>();
-        factory.Create(Arg.Any<AiProviderKind>(), Arg.Any<string>())
-               .Returns(_ => throw new InvalidOperationException("Model 'foo' not in allowlist"));
+        factory.CreateAsync(Arg.Any<Guid>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns<IChatClient>(_ => throw new InvalidOperationException("Model 'foo' not in allowlist"));
         var sut = new QuizGenerator(factory, checker);
 
-        var events = await Drain(sut.GenerateAsync(StarWars(), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(), default));
 
         var err = events.Last().ShouldBeOfType<GenerationEvent.Error>();
         err.Retryable.ShouldBeFalse();
@@ -132,7 +135,7 @@ public class QuizGeneratorTests
         var (sut, client, _) = Build();
         StubStream(client, "this is not json at all");
 
-        var events = await Drain(sut.GenerateAsync(StarWars(), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(), default));
 
         var err = events.Last().ShouldBeOfType<GenerationEvent.Error>();
         err.Retryable.ShouldBeTrue();
@@ -149,7 +152,7 @@ public class QuizGeneratorTests
         """);
         var req = StarWars(3);
 
-        var events = await Drain(sut.GenerateAsync(req, default));
+        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
 
         var warning = events.OfType<GenerationEvent.Warning>().Single();
         warning.Message.ShouldContain("Star Wars");
@@ -165,10 +168,10 @@ public class QuizGeneratorTests
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
 
-        await Drain(sut.GenerateAsync(StarWars(1, factCheck: false), default));
+        await Drain(sut.GenerateAsync(TestUser, StarWars(1, factCheck: false), default));
 
         await checker.DidNotReceive().CheckAsync(
-            Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -179,7 +182,7 @@ public class QuizGeneratorTests
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
         // Checker says "this question is wrong, here's why".
-        checker.CheckAsync(Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        checker.CheckAsync(Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(call =>
                {
                    var draft = call.Arg<DraftQuiz>();
@@ -194,11 +197,12 @@ public class QuizGeneratorTests
             FactCheckProvider = "OpenAI",
             FactCheckModel    = "gpt-4o",
         };
-        var events = await Drain(sut.GenerateAsync(req, default));
+        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
 
         // Critical assertion: checker called with the FACT-CHECK pair, not
         // the generation pair.
         await checker.Received(1).CheckAsync(
+            TestUser,
             Arg.Any<DraftQuiz>(),
             AiProviderKind.OpenAI,
             "gpt-4o",
@@ -228,13 +232,14 @@ public class QuizGeneratorTests
         StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
-        checker.CheckAsync(Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        checker.CheckAsync(Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(call => call.Arg<DraftQuiz>());
 
         // No FactCheck* fields set — should fall back to the generation pair.
-        await Drain(sut.GenerateAsync(StarWars(1, factCheck: true), default));
+        await Drain(sut.GenerateAsync(TestUser, StarWars(1, factCheck: true), default));
 
         await checker.Received(1).CheckAsync(
+            TestUser,
             Arg.Any<DraftQuiz>(),
             AiProviderKind.Ollama,
             "llama3.2:1b",
@@ -250,10 +255,10 @@ public class QuizGeneratorTests
         """);
         var req = StarWars(1, factCheck: true) with { FactCheckProvider = "Bogus" };
 
-        var events = await Drain(sut.GenerateAsync(req, default));
+        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
 
         await checker.DidNotReceive().CheckAsync(
-            Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         var warning = events.OfType<GenerationEvent.Warning>().Single();
         warning.Message.ShouldContain("Bogus");
         events.Last().ShouldBeOfType<GenerationEvent.Done>();
@@ -267,7 +272,7 @@ public class QuizGeneratorTests
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
 
-        var events = await Drain(sut.GenerateAsync(StarWars(1), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(1), default));
 
         var done = events.OfType<GenerationEvent.Done>().Single();
         done.Quiz.Title.ShouldBe("Star Wars night");
@@ -289,7 +294,7 @@ public class QuizGeneratorTests
             """{"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}""",
             "\n```");
 
-        var events = await Drain(sut.GenerateAsync(StarWars(1), default));
+        var events = await Drain(sut.GenerateAsync(TestUser, StarWars(1), default));
 
         events.OfType<GenerationEvent.Question>().Count().ShouldBe(1);
         events.Last().ShouldBeOfType<GenerationEvent.Done>();

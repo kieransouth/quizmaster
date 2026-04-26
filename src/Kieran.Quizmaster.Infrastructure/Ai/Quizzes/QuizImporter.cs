@@ -12,6 +12,7 @@ public sealed class QuizImporter(
     IFactChecker         factChecker) : IQuizImporter
 {
     public async IAsyncEnumerable<GenerationEvent> ImportAsync(
+        Guid              userId,
         ImportQuizRequest request,
         [EnumeratorCancellation] CancellationToken ct)
     {
@@ -26,7 +27,7 @@ public sealed class QuizImporter(
 
         IChatClient? client = null;
         string?      createError = null;
-        try   { client = factory.Create(providerKind, request.Model); }
+        try   { client = await factory.CreateAsync(userId, providerKind, request.Model, ct); }
         catch (Exception ex) { createError = ex.Message; }
         if (client is null)
         {
@@ -66,6 +67,7 @@ public sealed class QuizImporter(
                 try
                 {
                     var checkedDraft = await factChecker.CheckAsync(
+                        userId,
                         new DraftQuiz(
                             request.Title, "Imported", request.Provider, request.Model,
                             Topics: [], request.SourceText, collected),

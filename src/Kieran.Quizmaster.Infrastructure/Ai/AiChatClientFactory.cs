@@ -9,16 +9,23 @@ using OpenAI;
 
 namespace Kieran.Quizmaster.Infrastructure.Ai;
 
-public sealed class AiChatClientFactory(IOptions<AiOptions> options) : IAiChatClientFactory
+public sealed class AiChatClientFactory(
+    IOptions<AiOptions>  options,
+    IUserApiKeyService   keys) : IAiChatClientFactory
 {
     private readonly AiOptions _options = options.Value;
 
-    public IChatClient Create(AiProviderKind provider, string model)
+    public async Task<IChatClient> CreateAsync(
+        Guid userId, AiProviderKind provider, string model, CancellationToken ct = default)
     {
         if (!_options.Providers.TryGetValue(provider.Name, out var cfg))
             throw new InvalidOperationException(
                 $"AI provider '{provider.Name}' is not configured. Available: " +
                 $"[{string.Join(", ", _options.Providers.Keys)}]");
+
+        if (!cfg.Enabled)
+            throw new InvalidOperationException(
+                $"AI provider '{provider.Name}' is disabled on this server.");
 
         if (!cfg.Models.Contains(model))
             throw new InvalidOperationException(
@@ -30,48 +37,62 @@ public sealed class AiChatClientFactory(IOptions<AiOptions> options) : IAiChatCl
         return provider.Value switch
         {
             1 /* Ollama */    => CreateOllama(cfg, model),
-            2 /* OpenAI */    => CreateOpenAI(cfg, model),
-            3 /* Anthropic */ => CreateAnthropic(cfg, model),
+            2 /* OpenAI */    => CreateOpenAI(model, await RequireUserKeyAsync(userId, provider.Name, ct)),
+            3 /* Anthropic */ => CreateAnthropic(model, await RequireUserKeyAsync(userId, provider.Name, ct)),
             _ => throw new InvalidOperationException($"Unknown provider value: {provider.Value}")
         };
     }
 
-    private static IChatClient CreateOpenAI(AiProviderConfig cfg, string model)
+    public async Task<AiProvidersResponse> GetAvailableProvidersAsync(
+        Guid userId, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
-            throw new InvalidOperationException(
-                "OpenAI provider requires an API key. Set Ai__Providers__OpenAI__ApiKey.");
+        var statuses = await keys.ListAsync(userId, ct);
+        var keyByProvider = statuses.ToDictionary(s => s.Provider, s => s.HasKey);
 
-        return new OpenAIClient(cfg.ApiKey)
-            .GetChatClient(model)
-            .AsIChatClient();
-    }
-
-    private static IChatClient CreateAnthropic(AiProviderConfig cfg, string model)
-    {
-        if (string.IsNullOrWhiteSpace(cfg.ApiKey))
-            throw new InvalidOperationException(
-                "Anthropic provider requires an API key. Set Ai__Providers__Anthropic__ApiKey.");
-
-        // MessagesEndpoint implements IChatClient but reads ModelId from
-        // per-call ChatOptions. Wrap with a ChatClientBuilder that injects
-        // the configured model when callers don't supply one.
-        IChatClient inner = new AnthropicClient(cfg.ApiKey).Messages;
-        return new ChatClientBuilder(inner)
-            .ConfigureOptions(o => o.ModelId ??= model)
-            .Build();
-    }
-
-    public AiProvidersResponse GetAvailableProviders()
-    {
         var providers = _options.Providers
+            .Where(kvp => kvp.Value.Enabled)
+            .Where(kvp => RequiresUserKey(kvp.Key) ? keyByProvider.GetValueOrDefault(kvp.Key) : true)
             .Select(kvp => new AiProviderInfo(kvp.Key, kvp.Value.Models))
             .ToList();
 
-        return new AiProvidersResponse(
-            _options.DefaultProvider,
-            _options.DefaultModel,
-            providers);
+        // Defaults only matter when they're still in the available list.
+        var defaultProvider = providers.Any(p => p.Provider == _options.DefaultProvider)
+            ? _options.DefaultProvider
+            : providers.FirstOrDefault()?.Provider ?? string.Empty;
+
+        var defaultModel = providers
+            .FirstOrDefault(p => p.Provider == defaultProvider)
+            ?.Models.Contains(_options.DefaultModel) == true
+                ? _options.DefaultModel
+                : providers.FirstOrDefault(p => p.Provider == defaultProvider)?.Models.FirstOrDefault() ?? string.Empty;
+
+        return new AiProvidersResponse(defaultProvider, defaultModel, providers);
+    }
+
+    private async Task<string> RequireUserKeyAsync(Guid userId, string provider, CancellationToken ct)
+    {
+        var key = await keys.GetKeyAsync(userId, provider, ct);
+        if (string.IsNullOrWhiteSpace(key))
+            throw new InvalidOperationException(
+                $"No {provider} API key on file for the current user. Add one in Settings before generating with this provider.");
+        return key;
+    }
+
+    private static bool RequiresUserKey(string providerName) =>
+        providerName != AiProviderKind.Ollama.Name;
+
+    private static IChatClient CreateOpenAI(string model, string apiKey) =>
+        new OpenAIClient(apiKey).GetChatClient(model).AsIChatClient();
+
+    private static IChatClient CreateAnthropic(string model, string apiKey)
+    {
+        // MessagesEndpoint implements IChatClient but reads ModelId from
+        // per-call ChatOptions. Wrap with a ChatClientBuilder that injects
+        // the configured model when callers don't supply one.
+        IChatClient inner = new AnthropicClient(apiKey).Messages;
+        return new ChatClientBuilder(inner)
+            .ConfigureOptions(o => o.ModelId ??= model)
+            .Build();
     }
 
     private static IChatClient CreateOllama(AiProviderConfig cfg, string model)

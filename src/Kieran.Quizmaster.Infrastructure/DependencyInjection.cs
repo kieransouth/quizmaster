@@ -9,6 +9,7 @@ using Kieran.Quizmaster.Infrastructure.Auth;
 using Kieran.Quizmaster.Infrastructure.Persistence;
 using Kieran.Quizmaster.Infrastructure.Quizzes;
 using Kieran.Quizmaster.Infrastructure.Sessions;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -68,7 +69,16 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AiOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddSingleton<IAiChatClientFactory, AiChatClientFactory>();
+        // Data Protection persists its key ring to the configured path
+        // (mounted as a docker volume in production). Without this, every
+        // container restart invalidates every stored UserApiKey.
+        var dataProtectionPath = configuration["DataProtection:KeyRingPath"];
+        var dpBuilder = services.AddDataProtection().SetApplicationName("Quizmaster");
+        if (!string.IsNullOrWhiteSpace(dataProtectionPath))
+            dpBuilder.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionPath));
+
+        services.AddScoped<IUserApiKeyService,  UserApiKeyService>();
+        services.AddScoped<IAiChatClientFactory, AiChatClientFactory>();
 
         // Quiz generation pipeline (Phase 5)
         services.AddScoped<IFactChecker,     FactChecker>();

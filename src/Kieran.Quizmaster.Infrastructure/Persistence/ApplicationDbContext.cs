@@ -14,6 +14,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<QuizSession>  QuizSessions   => Set<QuizSession>();
     public DbSet<Answer>       Answers        => Set<Answer>();
     public DbSet<RefreshToken> RefreshTokens  => Set<RefreshToken>();
+    public DbSet<UserApiKey>   UserApiKeys    => Set<UserApiKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

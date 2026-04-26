@@ -12,7 +12,8 @@ public sealed class QuizGenerator(
     IFactChecker         factChecker) : IQuizGenerator
 {
     public async IAsyncEnumerable<GenerationEvent> GenerateAsync(
-        GenerateQuizRequest request,
+        Guid                 userId,
+        GenerateQuizRequest  request,
         [EnumeratorCancellation] CancellationToken ct)
     {
         yield return new GenerationEvent.Status("generating");
@@ -26,7 +27,7 @@ public sealed class QuizGenerator(
 
         IChatClient? client = null;
         string?      createError = null;
-        try   { client = factory.Create(providerKind, request.Model); }
+        try   { client = await factory.CreateAsync(userId, providerKind, request.Model, ct); }
         catch (Exception ex) { createError = ex.Message; }
         if (client is null)
         {
@@ -81,6 +82,7 @@ public sealed class QuizGenerator(
                 try
                 {
                     var checkedDraft = await factChecker.CheckAsync(
+                        userId,
                         new DraftQuiz(
                             request.Title, "Generated", request.Provider, request.Model,
                             request.Topics, SourceText: null, collected),

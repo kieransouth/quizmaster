@@ -255,7 +255,20 @@ export default function NewQuiz() {
           {mode !== "byo" && providers.kind === "error" && (
             <p className="text-sm text-red-500">failed to load providers</p>
           )}
-          {mode !== "byo" && providers.kind === "ok" && (
+          {mode !== "byo" && providers.kind === "ok" && providers.data.providers.length === 0 && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+              <p className="font-medium text-amber-700 dark:text-amber-300">
+                No AI providers available.
+              </p>
+              <p className="mt-1 text-amber-700/80 dark:text-amber-300/80">
+                Add an OpenAI or Anthropic key in{" "}
+                <Link to="/settings" className="underline">Settings</Link>, or
+                use the <button type="button" onClick={() => setMode("byo")} className="underline">BYO AI</button>{" "}
+                tab to paste a quiz from any tool without server-side API calls.
+              </p>
+            </div>
+          )}
+          {mode !== "byo" && providers.kind === "ok" && providers.data.providers.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-sm text-fg-muted">Provider</label>

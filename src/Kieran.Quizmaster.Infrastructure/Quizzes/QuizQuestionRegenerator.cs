@@ -33,7 +33,7 @@ public sealed class QuizQuestionRegenerator(
         if (!AiProviderKind.TryFromName(request.Provider, out var providerKind))
             throw new InvalidOperationException($"Unknown provider '{request.Provider}'.");
 
-        var client = factory.Create(providerKind, request.Model);
+        var client = await factory.CreateAsync(userId, providerKind, request.Model, ct);
 
         var others = quiz.Questions
             .Where(q => q.Id != questionId)

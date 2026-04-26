@@ -7,6 +7,7 @@ import NewQuiz from "./pages/NewQuiz";
 import Play from "./pages/Play";
 import QuizDetail from "./pages/QuizDetail";
 import Register from "./pages/Register";
+import Settings from "./pages/Settings";
 import SharedSession from "./pages/SharedSession";
 import { DesktopOnlyBanner } from "./ui/DesktopOnlyBanner";
 
@@ -51,6 +52,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Play />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           }
         />

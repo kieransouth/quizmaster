@@ -11,6 +11,7 @@ public interface IFactChecker
     /// Returns a new draft with the same shape — never mutates the input.
     /// </summary>
     Task<DraftQuiz> CheckAsync(
+        Guid              userId,
         DraftQuiz         draft,
         AiProviderKind    provider,
         string            model,

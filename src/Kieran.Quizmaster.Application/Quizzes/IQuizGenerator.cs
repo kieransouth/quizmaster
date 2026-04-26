@@ -9,6 +9,7 @@ public interface IQuizGenerator
     /// warning, done, error). Caller is responsible for the SSE wire format.
     /// </summary>
     IAsyncEnumerable<GenerationEvent> GenerateAsync(
-        GenerateQuizRequest request,
+        Guid                 userId,
+        GenerateQuizRequest  request,
         CancellationToken    cancellationToken);
 }
