@@ -7,9 +7,7 @@ using Microsoft.Extensions.AI;
 
 namespace Kieran.Quizmaster.Infrastructure.Ai.Quizzes;
 
-public sealed class QuizGenerator(
-    IAiChatClientFactory factory,
-    IFactChecker         factChecker) : IQuizGenerator
+public sealed class QuizGenerator(IAiChatClientFactory factory) : IQuizGenerator
 {
     public async IAsyncEnumerable<GenerationEvent> GenerateAsync(
         Guid                 userId,
@@ -58,55 +56,6 @@ public sealed class QuizGenerator(
             yield break;
         }
 
-        // Optional fact-check. Re-emit each affected question with its new
-        // flagged state — frontend dedupes question events by Order.
-        if (request.RunFactCheck)
-        {
-            yield return new GenerationEvent.Status("fact-checking");
-
-            // Resolve fact-check provider+model. Falls back to generation pair
-            // when the request omits them. Asking a different model to verify
-            // is the whole point — same model grading its own work is mostly
-            // a vibe check.
-            var factCheckProviderName = request.FactCheckProvider ?? request.Provider;
-            var factCheckModel        = request.FactCheckModel    ?? request.Model;
-            string?               factCheckError = null;
-            List<DraftQuestion>?  updated        = null;
-
-            if (!AiProviderKind.TryFromName(factCheckProviderName, out var factCheckKind))
-            {
-                factCheckError = $"unknown provider '{factCheckProviderName}'";
-            }
-            else
-            {
-                try
-                {
-                    var checkedDraft = await factChecker.CheckAsync(
-                        userId,
-                        new DraftQuiz(
-                            request.Title, "Generated", request.Provider, request.Model,
-                            request.Topics, SourceText: null, collected),
-                        factCheckKind, factCheckModel, ct);
-                    updated = [.. checkedDraft.Questions];
-                }
-                catch (Exception ex) { factCheckError = ex.Message; }
-            }
-
-            if (factCheckError is not null)
-            {
-                yield return new GenerationEvent.Warning(
-                    $"Fact-check skipped due to error: {factCheckError}");
-            }
-            else if (updated is not null)
-            {
-                collected = updated;
-                foreach (var q in collected.Where(q => q.FactCheckFlagged))
-                {
-                    yield return new GenerationEvent.Question(q);
-                }
-            }
-        }
-
         // Partial-count warnings (e.g. asked for 5 on The Office, got 3).
         var byTopic = collected
             .GroupBy(q => q.Topic, StringComparer.OrdinalIgnoreCase)
@@ -121,11 +70,54 @@ public sealed class QuizGenerator(
             }
         }
 
+        // Interleave across topics so the host doesn't get all 5 of one topic
+        // back-to-back. Only kicks in when there are 2+ distinct topics —
+        // single-topic generations have nothing to interleave.
+        var interleaved = InterleaveByTopic(collected);
+
         var draft = new DraftQuiz(
             request.Title, "Generated", request.Provider, request.Model,
-            request.Topics, SourceText: null, collected);
+            request.Topics, SourceText: null, interleaved);
 
         yield return new GenerationEvent.Done(draft);
+    }
+
+    /// <summary>
+    /// Round-robin pull from each topic group with a single Fisher-Yates
+    /// shuffle of the cycle order, so consecutive questions are unlikely
+    /// to share a topic and the order varies between runs. Order values are
+    /// re-assigned to match the new sequence. No-op when fewer than 2
+    /// distinct topics are present.
+    /// </summary>
+    public static IReadOnlyList<DraftQuestion> InterleaveByTopic(IReadOnlyList<DraftQuestion> questions)
+    {
+        var groups = questions
+            .GroupBy(q => q.Topic, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new Queue<DraftQuestion>(g))
+            .ToList();
+        if (groups.Count < 2) return questions;
+
+        var rng = Random.Shared;
+        // Shuffle cycle order once so the lead topic varies between runs.
+        for (var i = groups.Count - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (groups[i], groups[j]) = (groups[j], groups[i]);
+        }
+
+        var result = new List<DraftQuestion>(questions.Count);
+        while (groups.Any(g => g.Count > 0))
+        {
+            foreach (var g in groups)
+            {
+                if (g.Count > 0) result.Add(g.Dequeue());
+            }
+        }
+
+        // Re-assign Order so the saved/displayed sequence matches the new layout.
+        return result
+            .Select((q, i) => q with { Order = i })
+            .ToList();
     }
 
     /// <summary>

@@ -37,23 +37,15 @@ export interface GenerateQuizRequest {
   title: string;
   topics: TopicRequest[];
   multipleChoiceFraction: number;
-  runFactCheck: boolean;
   provider: string;
   model: string;
-  /** Optional: provider used for the fact-check pass. Falls back to `provider`. */
-  factCheckProvider?: string;
-  /** Optional: model used for the fact-check pass. Falls back to `model`. */
-  factCheckModel?: string;
 }
 
 export interface ImportQuizRequest {
   title: string;
   sourceText: string;
-  runFactCheck: boolean;
   provider: string;
   model: string;
-  factCheckProvider?: string;
-  factCheckModel?: string;
 }
 
 /** "Bring your own AI" — pre-formed JSON the user got from an external tool. */
@@ -61,4 +53,21 @@ export interface ImportFromJsonRequest {
   title: string;
   topics: TopicRequest[];
   sourceJson: string;
+}
+
+// Fact-check API contracts (separate step from generation)
+
+export interface FactCheckDraftRequest {
+  questions: DraftQuestion[];
+  provider: string;
+  model: string;
+}
+
+export interface FactCheckDraftFromJsonRequest {
+  questions: DraftQuestion[];
+  sourceJson: string;
+}
+
+export interface FactCheckDraftResponse {
+  questions: DraftQuestion[];
 }

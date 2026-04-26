@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useProviders } from "../ai/useProviders";
-import { saveQuiz } from "../quizzes/api";
+import { factCheckDraftAi, factCheckDraftJson, saveQuiz } from "../quizzes/api";
 import { useGenerationStream } from "../quizzes/useGenerationStream";
 import { buildGenerationPrompt } from "../quizzes/promptTemplate";
+import { FactCheckPanel } from "../quizzes/FactCheckPanel";
 import type {
   DraftQuestion,
   GenerateQuizRequest,
@@ -23,20 +24,20 @@ export default function NewQuiz() {
   // Hide answers by default so the host can play along with the team
   // without spoiling themselves while reviewing the generated quiz.
   const [showAnswers, setShowAnswers] = useState(false);
+  // Fact-check is a separate post-generation step. When the user runs it
+  // (AI or BYO), we replace the questions list with the merged result so
+  // flagged badges show inline and Save persists the flags.
+  const [factCheckedQuestions, setFactCheckedQuestions] = useState<DraftQuestion[] | null>(null);
+  const [factCheckBusy, setFactCheckBusy] = useState(false);
+  const [factCheckError, setFactCheckError] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("generate");
   const [title, setTitle] = useState("");
   const [topics, setTopics] = useState<TopicRequest[]>([{ name: "", count: 5 }]);
   const [mcFraction, setMcFraction] = useState(0.5);
   const [sourceText, setSourceText] = useState("");
-  const [factCheck, setFactCheck] = useState(false);
   const [provider, setProvider] = useState<string>("");
   const [model, setModel] = useState<string>("");
-  // Independent fact-check provider/model. Asking a different model to
-  // verify is the whole point of fact-check; same model grading itself
-  // is mostly a vibe check.
-  const [factCheckProvider, setFactCheckProvider] = useState<string>("");
-  const [factCheckModel, setFactCheckModel] = useState<string>("");
   // BYO-AI mode: user pastes JSON from an external AI tool.
   const [pastedJson, setPastedJson] = useState("");
   const [promptCopied, setPromptCopied] = useState(false);
@@ -50,23 +51,6 @@ export default function NewQuiz() {
     }
   }, [providers, provider]);
 
-  // Default the fact-check pair to a *different* provider when more than
-  // one is configured; otherwise the default provider but a different model.
-  useEffect(() => {
-    if (providers.kind !== "ok" || !provider) return;
-    if (factCheckProvider) return;
-    const otherProvider = providers.data.providers.find((p) => p.provider !== provider);
-    if (otherProvider) {
-      setFactCheckProvider(otherProvider.provider);
-      setFactCheckModel(otherProvider.models[0] ?? "");
-    } else {
-      const same = providers.data.providers.find((p) => p.provider === provider);
-      const altModel = same?.models.find((m) => m !== model) ?? same?.models[0] ?? "";
-      setFactCheckProvider(provider);
-      setFactCheckModel(altModel);
-    }
-  }, [providers, provider, model, factCheckProvider]);
-
   // When provider changes, snap model to a valid choice for that provider.
   useEffect(() => {
     if (providers.kind !== "ok") return;
@@ -75,15 +59,6 @@ export default function NewQuiz() {
       setModel(p.models[0] ?? "");
     }
   }, [provider, model, providers]);
-
-  // Same snap behaviour for the fact-check pair.
-  useEffect(() => {
-    if (providers.kind !== "ok") return;
-    const p = providers.data.providers.find((x) => x.provider === factCheckProvider);
-    if (p && !p.models.includes(factCheckModel)) {
-      setFactCheckModel(p.models[0] ?? "");
-    }
-  }, [factCheckProvider, factCheckModel, providers]);
 
   // Derived state from the event stream.
   const status = useMemo(
@@ -111,6 +86,16 @@ export default function NewQuiz() {
     () => stream.events.find((e) => e.type === "done"),
     [stream.events],
   );
+  // Reset any previous fact-check pass when a new generation kicks off.
+  useEffect(() => {
+    if (stream.running) {
+      setFactCheckedQuestions(null);
+      setFactCheckError(null);
+    }
+  }, [stream.running]);
+  // Display the fact-checked list when one exists, otherwise the streaming
+  // list. Save uses the same source so flags persist.
+  const displayedQuestions = factCheckedQuestions ?? questions;
 
   const totalRequested = topics.reduce((sum, t) => sum + (t.count || 0), 0);
   const validToSubmit =
@@ -143,25 +128,16 @@ export default function NewQuiz() {
         title: title.trim(),
         topics: topics.map((t) => ({ name: t.name.trim(), count: t.count })),
         multipleChoiceFraction: mcFraction,
-        runFactCheck: factCheck,
         provider,
         model,
-        // Only send fact-check pair when fact-check is enabled.
-        ...(factCheck && factCheckProvider
-          ? { factCheckProvider, factCheckModel }
-          : {}),
       };
       await stream.start("/api/quizzes/generate", req);
     } else {
       const req: ImportQuizRequest = {
         title: title.trim(),
         sourceText: sourceText.trim(),
-        runFactCheck: factCheck,
         provider,
         model,
-        ...(factCheck && factCheckProvider
-          ? { factCheckProvider, factCheckModel }
-          : {}),
       };
       await stream.start("/api/quizzes/import", req);
     }
@@ -175,10 +151,6 @@ export default function NewQuiz() {
   const currentProviderModels =
     providers.kind === "ok"
       ? providers.data.providers.find((p) => p.provider === provider)?.models ?? []
-      : [];
-  const currentFactCheckModels =
-    providers.kind === "ok"
-      ? providers.data.providers.find((p) => p.provider === factCheckProvider)?.models ?? []
       : [];
 
   return (
@@ -303,63 +275,6 @@ export default function NewQuiz() {
             </div>
           )}
 
-          {mode !== "byo" && (
-            <label className="flex items-center gap-2 text-sm text-fg-muted">
-              <input
-                type="checkbox"
-                checked={factCheck}
-                onChange={(e) => setFactCheck(e.target.checked)}
-                disabled={stream.running}
-              />
-              Run AI fact-check (slower, second model call)
-            </label>
-          )}
-
-          {factCheck && providers.kind === "ok" && (
-            <div className="space-y-2 rounded-md border border-border bg-surface-muted p-3">
-              <p className="text-xs text-fg-muted">
-                Fact-check using a different model gives independent verification
-                rather than asking the same model to grade itself.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs text-fg-muted">
-                    Fact-check provider
-                  </label>
-                  <select
-                    value={factCheckProvider}
-                    onChange={(e) => setFactCheckProvider(e.target.value)}
-                    disabled={stream.running}
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-fg"
-                  >
-                    {providers.data.providers.map((p) => (
-                      <option key={p.provider} value={p.provider}>
-                        {p.provider}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-fg-muted">
-                    Fact-check model
-                  </label>
-                  <select
-                    value={factCheckModel}
-                    onChange={(e) => setFactCheckModel(e.target.value)}
-                    disabled={stream.running}
-                    className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-fg"
-                  >
-                    {currentFactCheckModels.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={!validToSubmit || stream.running}
@@ -424,7 +339,7 @@ export default function NewQuiz() {
             </div>
           )}
 
-          {questions.length > 0 && (
+          {displayedQuestions.length > 0 && (
             <div className="flex items-center justify-between rounded-md border border-border bg-surface px-4 py-2 text-sm">
               <span className="text-fg-muted">
                 {showAnswers
@@ -441,15 +356,47 @@ export default function NewQuiz() {
             </div>
           )}
 
-          {questions.map((q, i) => (
+          {displayedQuestions.map((q, i) => (
             <QuestionCard key={i} index={i} q={q} showAnswers={showAnswers} />
           ))}
+
+          {doneEvent && doneEvent.type === "done" && displayedQuestions.length > 0 && (
+            <FactCheckPanel
+              questions={displayedQuestions}
+              busy={factCheckBusy}
+              error={factCheckError}
+              onApplyAi={async (provider, model) => {
+                setFactCheckBusy(true);
+                setFactCheckError(null);
+                try {
+                  const merged = await factCheckDraftAi(displayedQuestions, provider, model);
+                  setFactCheckedQuestions(merged);
+                } catch (e) {
+                  setFactCheckError(e instanceof Error ? e.message : "Fact-check failed");
+                } finally {
+                  setFactCheckBusy(false);
+                }
+              }}
+              onApplyJson={async (sourceJson) => {
+                setFactCheckBusy(true);
+                setFactCheckError(null);
+                try {
+                  const merged = await factCheckDraftJson(displayedQuestions, sourceJson);
+                  setFactCheckedQuestions(merged);
+                } catch (e) {
+                  setFactCheckError(e instanceof Error ? e.message : "Fact-check failed");
+                } finally {
+                  setFactCheckBusy(false);
+                }
+              }}
+            />
+          )}
 
           {doneEvent && doneEvent.type === "done" && (
             <div className="rounded-md border border-accent/40 bg-accent/10 p-4">
               <p className="font-medium">
-                Done — {doneEvent.quiz.questions.length} question
-                {doneEvent.quiz.questions.length === 1 ? "" : "s"}.
+                Done — {displayedQuestions.length} question
+                {displayedQuestions.length === 1 ? "" : "s"}.
               </p>
               <p className="mt-1 text-sm text-fg-muted">
                 Save it to the question bank — you can edit and play it
@@ -463,7 +410,11 @@ export default function NewQuiz() {
                     setSaving(true);
                     setSaveError(null);
                     try {
-                      const { id } = await saveQuiz(doneEvent.quiz);
+                      const draftToSave = {
+                        ...doneEvent.quiz,
+                        questions: displayedQuestions,
+                      };
+                      const { id } = await saveQuiz(draftToSave);
                       navigate(`/quizzes/${id}`);
                     } catch (e) {
                       setSaveError(e instanceof Error ? e.message : "Save failed");

@@ -1,5 +1,5 @@
 import { apiFetch } from "../api/client";
-import type { DraftQuiz } from "./types";
+import type { DraftQuestion, DraftQuiz } from "./types";
 
 export interface QuestionDto {
   id: string;
@@ -83,6 +83,65 @@ export async function updateQuiz(id: string, body: UpdateQuizRequest): Promise<v
 export async function deleteQuiz(id: string): Promise<void> {
   const res = await apiFetch(`/api/quizzes/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+}
+
+// ----- Fact-check (decoupled from generation) -----
+
+async function readErrorMessage(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => null);
+  return (body?.error as string | undefined) ?? `${fallback}: ${res.status}`;
+}
+
+export async function factCheckDraftAi(
+  questions: DraftQuestion[],
+  provider: string,
+  model: string,
+): Promise<DraftQuestion[]> {
+  const res = await apiFetch("/api/quizzes/fact-check", {
+    method: "POST",
+    body: JSON.stringify({ questions, provider, model }),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Fact-check failed"));
+  const body = (await res.json()) as { questions: DraftQuestion[] };
+  return body.questions;
+}
+
+export async function factCheckDraftJson(
+  questions: DraftQuestion[],
+  sourceJson: string,
+): Promise<DraftQuestion[]> {
+  const res = await apiFetch("/api/quizzes/fact-check-json", {
+    method: "POST",
+    body: JSON.stringify({ questions, sourceJson }),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Fact-check failed"));
+  const body = (await res.json()) as { questions: DraftQuestion[] };
+  return body.questions;
+}
+
+export async function factCheckSavedAi(
+  quizId: string,
+  provider: string,
+  model: string,
+): Promise<QuizDetailDto> {
+  const res = await apiFetch(`/api/quizzes/${quizId}/fact-check`, {
+    method: "POST",
+    body: JSON.stringify({ provider, model }),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Fact-check failed"));
+  return res.json();
+}
+
+export async function factCheckSavedJson(
+  quizId: string,
+  sourceJson: string,
+): Promise<QuizDetailDto> {
+  const res = await apiFetch(`/api/quizzes/${quizId}/fact-check-json`, {
+    method: "POST",
+    body: JSON.stringify({ sourceJson }),
+  });
+  if (!res.ok) throw new Error(await readErrorMessage(res, "Fact-check failed"));
+  return res.json();
 }
 
 export async function regenerateQuestion(

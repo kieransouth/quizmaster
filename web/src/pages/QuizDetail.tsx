@@ -3,6 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useProviders } from "../ai/useProviders";
 import {
   deleteQuiz,
+  factCheckSavedAi,
+  factCheckSavedJson,
   getQuiz,
   regenerateQuestion,
   updateQuiz,
@@ -10,6 +12,7 @@ import {
   type QuizDetailDto,
   type UpdateQuestionRequest,
 } from "../quizzes/api";
+import { FactCheckPanel } from "../quizzes/FactCheckPanel";
 import { startSession } from "../sessions/api";
 import { ThemePicker } from "../ui/ThemePicker";
 import { useToast } from "../ui/toast";
@@ -31,6 +34,10 @@ export default function QuizDetail() {
   // Hide answers by default so the host can browse a saved quiz without
   // spoiling themselves before play. Toggle to reveal when actually editing.
   const [showAnswers, setShowAnswers] = useState(false);
+
+  const [showFactCheck, setShowFactCheck] = useState(false);
+  const [factCheckBusy, setFactCheckBusy] = useState(false);
+  const [factCheckError, setFactCheckError] = useState<string | null>(null);
 
   // Load
   useEffect(() => {
@@ -180,6 +187,15 @@ export default function QuizDetail() {
             {questions.length > 0 && (
               <button
                 type="button"
+                onClick={() => setShowFactCheck((v) => !v)}
+                className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg-muted hover:text-fg"
+              >
+                {showFactCheck ? "Hide fact-check" : "Fact-check"}
+              </button>
+            )}
+            {questions.length > 0 && (
+              <button
+                type="button"
                 disabled={dirty}
                 title={dirty ? "Save changes first" : "Start a play session"}
                 onClick={async () => {
@@ -249,6 +265,54 @@ export default function QuizDetail() {
             </div>
           )}
         </div>
+
+        {showFactCheck && (
+          <FactCheckPanel
+            questions={questions.map((q) => ({
+              topic:            q.topic,
+              text:             q.text,
+              type:             q.type,
+              correctAnswer:    q.correctAnswer,
+              options:          q.options,
+              explanation:      q.explanation,
+              order:            q.order,
+              factCheckFlagged: q.factCheckFlagged,
+              factCheckNote:    q.factCheckNote,
+            }))}
+            busy={factCheckBusy}
+            error={factCheckError}
+            onApplyAi={async (provider, model) => {
+              if (!id) return;
+              setFactCheckBusy(true);
+              setFactCheckError(null);
+              try {
+                const updated = await factCheckSavedAi(id, provider, model);
+                setQuiz(updated);
+                setQuestions(updated.questions);
+                push("Fact-check applied.", "success");
+              } catch (e) {
+                setFactCheckError(e instanceof Error ? e.message : "Fact-check failed");
+              } finally {
+                setFactCheckBusy(false);
+              }
+            }}
+            onApplyJson={async (sourceJson) => {
+              if (!id) return;
+              setFactCheckBusy(true);
+              setFactCheckError(null);
+              try {
+                const updated = await factCheckSavedJson(id, sourceJson);
+                setQuiz(updated);
+                setQuestions(updated.questions);
+                push("Fact-check applied.", "success");
+              } catch (e) {
+                setFactCheckError(e instanceof Error ? e.message : "Fact-check failed");
+              } finally {
+                setFactCheckBusy(false);
+              }
+            }}
+          />
+        )}
 
         {/* Regenerate provider/model picker */}
         {providers.kind === "ok" && (
