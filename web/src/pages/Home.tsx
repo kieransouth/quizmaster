@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../auth/store";
 import { listMyQuizzes, type QuizSummaryDto } from "../quizzes/api";
+import { GithubLink } from "../ui/GithubLink";
 import { ThemePicker } from "../ui/ThemePicker";
 
 export default function Home() {
@@ -35,6 +36,7 @@ export default function Home() {
               Settings
             </Link>
             <ThemePicker />
+            <GithubLink />
             <button
               onClick={onLogout}
               className="rounded-md border border-border bg-surface-muted px-3 py-1 text-fg hover:bg-surface"
