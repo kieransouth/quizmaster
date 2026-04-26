@@ -21,23 +21,59 @@ A live instance lives at **[quizmaster.spicy.gg](https://quizmaster.spicy.gg)** 
 
 ## It looks like
 
-![Home](docs/screenshots/home.png)
-*Saved quizzes from your library — generated, imported, and BYO-AI sources side-by-side.*
-
-![Import](docs/screenshots/import.png)
-*Paste an existing quiz from anywhere — the AI extracts each Q+A into the schema. Or use **BYO AI** to skip the API call entirely: copy the prompt, run it in your tool of choice, paste the JSON back.*
-
-![Fact check](docs/screenshots/fact-check.png)
-*A separately-chosen model audits each question; flagged ones surface the disagreement so the host can fix them before play.*
-
-![Play](docs/screenshots/play.png)
-*Slideshow play view, keyboard-first — 1–9 to pick, Enter to save and next, ←/→ to navigate.*
-
-![Reveal & grade](docs/screenshots/reveal.png)
-*Every team's answers side-by-side with the canonical answer, auto-graded with a manual override on the spot.*
-
-![Public share](docs/screenshots/share.png)
-*A read-only summary teams can revisit after the quiz.*
+<!-- Click any thumbnail to view full size. -->
+<table>
+  <tr>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/screenshots/home.png"><img src="docs/screenshots/home.png" alt="Home" width="100%"/></a>
+      <br/><sub><b>Home</b> — saved quizzes side-by-side: generated, imported, BYO-AI.</sub>
+    </td>
+    <td align="center" valign="top" width="50%">
+      <a href="docs/screenshots/new-generate.png"><img src="docs/screenshots/new-generate.png" alt="New quiz · Generate" width="100%"/></a>
+      <br/><sub><b>Generate</b> — topic builder, per-topic counts, MC/free-text mix, provider + model.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/new-import.png"><img src="docs/screenshots/new-import.png" alt="New quiz · Import" width="100%"/></a>
+      <br/><sub><b>Import</b> — paste an existing quiz; the AI extracts each Q+A into the schema.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/new-byo.png"><img src="docs/screenshots/new-byo.png" alt="New quiz · BYO AI" width="100%"/></a>
+      <br/><sub><b>BYO AI</b> — copy the prompt, run it in your tool of choice, paste the JSON back. No server-side AI calls.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/fact-check-ai.png"><img src="docs/screenshots/fact-check-ai.png" alt="Fact-check · AI" width="100%"/></a>
+      <br/><sub><b>Fact-check (AI)</b> — separately-chosen model audits each question; flagged ones surface inline.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/fact-check-byo.png"><img src="docs/screenshots/fact-check-byo.png" alt="Fact-check · BYO AI" width="100%"/></a>
+      <br/><sub><b>Fact-check (BYO)</b> — same prompt-and-paste pattern as BYO generation. Audit a quiz with no API keys.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/fact-check-flagged.png"><img src="docs/screenshots/fact-check-flagged.png" alt="A flagged question" width="100%"/></a>
+      <br/><sub><b>A flagged question</b> — the disagreement is surfaced inline so the host can fix it before play.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/play.png"><img src="docs/screenshots/play.png" alt="Play" width="100%"/></a>
+      <br/><sub><b>Play</b> — keyboard-first slideshow. 1–9 to pick, Enter to save and next, ←/→ to navigate.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/reveal.png"><img src="docs/screenshots/reveal.png" alt="Reveal &amp; grade" width="100%"/></a>
+      <br/><sub><b>Reveal &amp; grade</b> — final score, every team answer next to the canonical, public share link.</sub>
+    </td>
+    <td align="center" valign="top">
+      <a href="docs/screenshots/share.png"><img src="docs/screenshots/share.png" alt="Public share" width="100%"/></a>
+      <br/><sub><b>Public share</b> — a read-only summary teams can revisit after the quiz.</sub>
+    </td>
+  </tr>
+</table>
 
 ## You can host it
 
