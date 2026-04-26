@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # Opt into Node 24 for the JavaScript actions ahead of GitHub's June 2026
+  # default switch. Removes the deprecation banner from every run.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   api:
     name: api · build & test

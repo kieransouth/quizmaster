@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   completeSession,
@@ -76,7 +76,7 @@ function Slideshow({
     setDraft(q.answer.answerText);
   }, [q.id, q.answer.answerText]);
 
-  async function persistAndAdvance(direction: "next" | "prev" | "reveal") {
+  const persistAndAdvance = useCallback(async (direction: "next" | "prev" | "reveal") => {
     if (busy) return; // ignore double-clicks while a save is in flight
     setBusy(direction);
     try {
@@ -104,7 +104,7 @@ function Slideshow({
     } finally {
       setBusy(null);
     }
-  }
+  }, [busy, draft, q, idx, last, session.id, onChange, push]);
 
   // Global keyboard handlers.
   useEffect(() => {
@@ -159,7 +159,7 @@ function Slideshow({
     }
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [idx, last, draft, q]);
+  }, [idx, last, draft, q, persistAndAdvance, showHelp]);
 
   return (
     <div className="flex min-h-screen flex-col bg-bg">
