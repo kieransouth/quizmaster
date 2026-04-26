@@ -13,14 +13,13 @@ public class QuizGeneratorTests
 {
     private static readonly Guid TestUser = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
-    private static (QuizGenerator Sut, IChatClient Client, IFactChecker FactChecker) Build()
+    private static (QuizGenerator Sut, IChatClient Client) Build()
     {
         var factory = Substitute.For<IAiChatClientFactory>();
         var client  = Substitute.For<IChatClient>();
-        var checker = Substitute.For<IFactChecker>();
         factory.CreateAsync(Arg.Any<Guid>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns(client);
-        return (new QuizGenerator(factory, checker), client, checker);
+        return (new QuizGenerator(factory), client);
     }
 
     /// <summary>Build an IAsyncEnumerable&lt;ChatResponseUpdate&gt; from text chunks.</summary>
@@ -44,11 +43,10 @@ public class QuizGeneratorTests
     /// <summary>Convenience: stub with a single chunk containing a complete JSON document.</summary>
     private static void StubFullJson(IChatClient client, string json) => StubStream(client, json);
 
-    private static GenerateQuizRequest StarWars(int count = 2, bool factCheck = false) => new(
+    private static GenerateQuizRequest StarWars(int count = 2) => new(
         Title: "Star Wars night",
         Topics: [new TopicRequest("Star Wars", count)],
         MultipleChoiceFraction: 0.5,
-        RunFactCheck: factCheck,
         Provider: "Ollama",
         Model: "llama3.2:1b");
 
@@ -62,7 +60,7 @@ public class QuizGeneratorTests
     [Fact]
     public async Task Happy_path_emits_status_questions_then_done()
     {
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         StubFullJson(client, """
         {
           "questions": [
@@ -86,7 +84,7 @@ public class QuizGeneratorTests
     {
         // Split the JSON across multiple chunks at arbitrary points to prove
         // the parser handles incremental token boundaries correctly.
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         StubStream(client,
             "{\"questions\":[{\"topic\":\"Star Wars\",\"text\":\"Q1\",\"type\":",
             "\"FreeText\",\"correctAnswer\":\"A1\",\"options\":null,\"explanation\":null}",
@@ -102,7 +100,7 @@ public class QuizGeneratorTests
     [Fact]
     public async Task Unknown_provider_yields_non_retryable_error()
     {
-        var (sut, _, _) = Build();
+        var (sut, _) = Build();
         var req = StarWars() with { Provider = "DefinitelyNotAProvider" };
 
         var events = await Drain(sut.GenerateAsync(TestUser, req, default));
@@ -117,10 +115,9 @@ public class QuizGeneratorTests
     public async Task Factory_failure_yields_non_retryable_error()
     {
         var factory = Substitute.For<IAiChatClientFactory>();
-        var checker = Substitute.For<IFactChecker>();
         factory.CreateAsync(Arg.Any<Guid>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
                .Returns<IChatClient>(_ => throw new InvalidOperationException("Model 'foo' not in allowlist"));
-        var sut = new QuizGenerator(factory, checker);
+        var sut = new QuizGenerator(factory);
 
         var events = await Drain(sut.GenerateAsync(TestUser, StarWars(), default));
 
@@ -132,7 +129,7 @@ public class QuizGeneratorTests
     [Fact]
     public async Task Garbage_stream_with_no_questions_yields_retryable_error()
     {
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         StubStream(client, "this is not json at all");
 
         var events = await Drain(sut.GenerateAsync(TestUser, StarWars(), default));
@@ -145,7 +142,7 @@ public class QuizGeneratorTests
     [Fact]
     public async Task Partial_count_emits_warning()
     {
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         // Asked for 3 Star Wars, model returns 1.
         StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
@@ -161,113 +158,69 @@ public class QuizGeneratorTests
     }
 
     [Fact]
-    public async Task Fact_check_off_does_not_call_checker()
+    public void InterleaveByTopic_breaks_up_topic_runs_and_reorders_indices()
     {
-        var (sut, client, checker) = Build();
-        StubFullJson(client, """
-        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
-        """);
-
-        await Drain(sut.GenerateAsync(TestUser, StarWars(1, factCheck: false), default));
-
-        await checker.DidNotReceive().CheckAsync(
-            Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Fact_check_on_re_emits_flagged_question()
-    {
-        var (sut, client, checker) = Build();
-        StubFullJson(client, """
-        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
-        """);
-        // Checker says "this question is wrong, here's why".
-        checker.CheckAsync(Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .Returns(call =>
-               {
-                   var draft = call.Arg<DraftQuiz>();
-                   var flagged = draft.Questions[0] with { FactCheckFlagged = true, FactCheckNote = "wrong actually" };
-                   return draft with { Questions = [flagged] };
-               });
-
-        // Generation uses Ollama+llama3.2:1b; fact-check should use a
-        // different pair (OpenAI+gpt-4o) to verify independent grading.
-        var req = StarWars(1, factCheck: true) with
+        // 3 topics × 3 questions each, all grouped — exactly the "5 of one
+        // topic in a row" failure the user wanted to avoid.
+        var input = new List<DraftQuestion>();
+        foreach (var topic in new[] { "A", "B", "C" })
         {
-            FactCheckProvider = "OpenAI",
-            FactCheckModel    = "gpt-4o",
-        };
-        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
+            for (var i = 0; i < 3; i++)
+            {
+                input.Add(new DraftQuestion(
+                    Topic:            topic,
+                    Text:             $"{topic}{i}",
+                    Type:             "FreeText",
+                    CorrectAnswer:    "x",
+                    Options:          null,
+                    Explanation:      null,
+                    Order:            input.Count,
+                    FactCheckFlagged: false,
+                    FactCheckNote:    null));
+            }
+        }
 
-        // Critical assertion: checker called with the FACT-CHECK pair, not
-        // the generation pair.
-        await checker.Received(1).CheckAsync(
-            TestUser,
-            Arg.Any<DraftQuiz>(),
-            AiProviderKind.OpenAI,
-            "gpt-4o",
-            Arg.Any<CancellationToken>());
+        var interleaved = QuizGenerator.InterleaveByTopic(input);
 
-        var events2 = events; // alias to keep downstream assertions readable
+        // Same count, same set of questions (no duplicates / drops).
+        interleaved.Count.ShouldBe(input.Count);
+        interleaved.Select(q => q.Text).Order().ShouldBe(input.Select(q => q.Text).Order());
 
-        events.OfType<GenerationEvent.Status>().Select(s => s.Stage)
-              .ShouldContain("fact-checking");
+        // Order indices are re-numbered 0..N-1.
+        interleaved.Select(q => q.Order).ShouldBe(Enumerable.Range(0, input.Count).ToList());
 
-        // Two question events: one streamed live (unflagged) + one re-emit after fact-check (flagged).
-        var questionEvents = events.OfType<GenerationEvent.Question>().Select(q => q.Item).ToList();
-        questionEvents.Count.ShouldBe(2);
-        questionEvents[0].FactCheckFlagged.ShouldBeFalse();
-        questionEvents[1].FactCheckFlagged.ShouldBeTrue();
-        questionEvents[1].FactCheckNote.ShouldBe("wrong actually");
-
-        // Done event reflects the final (flagged) state.
-        var done = events.OfType<GenerationEvent.Done>().Single();
-        done.Quiz.Questions[0].FactCheckFlagged.ShouldBeTrue();
+        // Round-robin guarantees no two consecutive questions share a topic
+        // when groups are equal-size. Asserting that property directly is
+        // far stronger than asserting "different from input order".
+        for (var i = 1; i < interleaved.Count; i++)
+        {
+            interleaved[i].Topic.ShouldNotBe(interleaved[i - 1].Topic);
+        }
     }
 
     [Fact]
-    public async Task Fact_check_falls_back_to_generation_provider_when_unset()
+    public void InterleaveByTopic_is_a_no_op_for_single_topic_input()
     {
-        var (sut, client, checker) = Build();
-        StubFullJson(client, """
-        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
-        """);
-        checker.CheckAsync(Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .Returns(call => call.Arg<DraftQuiz>());
+        var input = Enumerable.Range(0, 5).Select(i => new DraftQuestion(
+            Topic:            "Star Wars",
+            Text:             $"Q{i}",
+            Type:             "FreeText",
+            CorrectAnswer:    "x",
+            Options:          null,
+            Explanation:      null,
+            Order:            i,
+            FactCheckFlagged: false,
+            FactCheckNote:    null)).ToList();
 
-        // No FactCheck* fields set — should fall back to the generation pair.
-        await Drain(sut.GenerateAsync(TestUser, StarWars(1, factCheck: true), default));
+        var result = QuizGenerator.InterleaveByTopic(input);
 
-        await checker.Received(1).CheckAsync(
-            TestUser,
-            Arg.Any<DraftQuiz>(),
-            AiProviderKind.Ollama,
-            "llama3.2:1b",
-            Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task Fact_check_unknown_provider_surfaces_warning_and_skips()
-    {
-        var (sut, client, checker) = Build();
-        StubFullJson(client, """
-        {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
-        """);
-        var req = StarWars(1, factCheck: true) with { FactCheckProvider = "Bogus" };
-
-        var events = await Drain(sut.GenerateAsync(TestUser, req, default));
-
-        await checker.DidNotReceive().CheckAsync(
-            Arg.Any<Guid>(), Arg.Any<DraftQuiz>(), Arg.Any<AiProviderKind>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-        var warning = events.OfType<GenerationEvent.Warning>().Single();
-        warning.Message.ShouldContain("Bogus");
-        events.Last().ShouldBeOfType<GenerationEvent.Done>();
+        result.ShouldBe(input);
     }
 
     [Fact]
     public async Task Done_event_carries_full_draft_with_questions()
     {
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         StubFullJson(client, """
         {"questions":[{"topic":"Star Wars","text":"Q","type":"FreeText","correctAnswer":"A","options":null,"explanation":null}]}
         """);
@@ -286,7 +239,7 @@ public class QuizGeneratorTests
     [Fact]
     public async Task Json_wrapped_in_markdown_is_extracted()
     {
-        var (sut, client, _) = Build();
+        var (sut, client) = Build();
         // Some models stubbornly wrap JSON despite instructions. The streaming
         // parser ignores everything before the first '['.
         StubStream(client,

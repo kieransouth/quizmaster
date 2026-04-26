@@ -88,6 +88,7 @@ public static class DependencyInjection
 
         // Quiz persistence + edit (Phase 6)
         services.AddScoped<IQuizService,             QuizService>();
+        services.AddScoped<IQuizFactCheckService,    QuizFactCheckService>();
         services.AddScoped<IQuizQuestionRegenerator, QuizQuestionRegenerator>();
 
         // Play sessions (Phase 7)

@@ -7,9 +7,7 @@ using Microsoft.Extensions.AI;
 
 namespace Kieran.Quizmaster.Infrastructure.Ai.Quizzes;
 
-public sealed class QuizImporter(
-    IAiChatClientFactory factory,
-    IFactChecker         factChecker) : IQuizImporter
+public sealed class QuizImporter(IAiChatClientFactory factory) : IQuizImporter
 {
     public async IAsyncEnumerable<GenerationEvent> ImportAsync(
         Guid              userId,
@@ -48,48 +46,6 @@ public sealed class QuizImporter(
         if (collected.Count == 0)
         {
             yield return new GenerationEvent.Warning("No questions extracted from the source text.");
-        }
-
-        if (request.RunFactCheck && collected.Count > 0)
-        {
-            yield return new GenerationEvent.Status("fact-checking");
-            var factCheckProviderName = request.FactCheckProvider ?? request.Provider;
-            var factCheckModel        = request.FactCheckModel    ?? request.Model;
-            string?              factCheckError = null;
-            List<DraftQuestion>? updated        = null;
-
-            if (!AiProviderKind.TryFromName(factCheckProviderName, out var factCheckKind))
-            {
-                factCheckError = $"unknown provider '{factCheckProviderName}'";
-            }
-            else
-            {
-                try
-                {
-                    var checkedDraft = await factChecker.CheckAsync(
-                        userId,
-                        new DraftQuiz(
-                            request.Title, "Imported", request.Provider, request.Model,
-                            Topics: [], request.SourceText, collected),
-                        factCheckKind, factCheckModel, ct);
-                    updated = [.. checkedDraft.Questions];
-                }
-                catch (Exception ex) { factCheckError = ex.Message; }
-            }
-
-            if (factCheckError is not null)
-            {
-                yield return new GenerationEvent.Warning(
-                    $"Fact-check skipped due to error: {factCheckError}");
-            }
-            else if (updated is not null)
-            {
-                collected = updated;
-                foreach (var q in collected.Where(q => q.FactCheckFlagged))
-                {
-                    yield return new GenerationEvent.Question(q);
-                }
-            }
         }
 
         var draft = new DraftQuiz(

@@ -95,9 +95,10 @@ public sealed class QuizJsonImporter : IQuizJsonImporter
 
     /// <summary>
     /// Defensive: trim markdown fences and surrounding prose. Slice from the
-    /// first '{' to the last '}' so JsonSerializer has a fair shot.
+    /// first '{' to the last '}' so JsonSerializer has a fair shot. Shared
+    /// with <see cref="FactCheckJsonMerger"/>.
     /// </summary>
-    private static string ExtractJson(string text)
+    internal static string ExtractJson(string text)
     {
         if (string.IsNullOrEmpty(text)) return text;
         var start = text.IndexOf('{');

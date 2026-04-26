@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Kieran.Quizmaster.Api.Sse;
 using Kieran.Quizmaster.Application.Quizzes;
 using Kieran.Quizmaster.Application.Quizzes.Dtos;
+using Kieran.Quizmaster.Domain.Enumerations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,6 +16,7 @@ public class QuizzesController(
     IQuizImporter            importer,
     IQuizJsonImporter        jsonImporter,
     IQuizService             quizService,
+    IQuizFactCheckService    factCheckService,
     IQuizQuestionRegenerator regenerator) : ControllerBase
 {
     // ----- AI-driven (Phase 5) -----
@@ -147,6 +149,110 @@ public class QuizzesController(
         {
             var newQ = await regenerator.RegenerateAsync(id, questionId, userId, request, ct);
             return newQ is null ? NotFound() : Ok(newQ);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    // ----- Standalone fact-check (decoupled from generation) -----
+
+    /// <summary>
+    /// AI fact-check on a pre-save draft. Body carries the draft questions
+    /// + chosen provider/model; response is the merged question list with
+    /// flags applied. Nothing is persisted.
+    /// </summary>
+    [HttpPost("fact-check")]
+    public async Task<IActionResult> FactCheckDraft(
+        [FromBody] FactCheckDraftRequest request,
+        CancellationToken                ct)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (!AiProviderKind.TryFromName(request.Provider, out var provider))
+            return BadRequest(new { error = $"Unknown provider '{request.Provider}'." });
+
+        try
+        {
+            var merged = await factCheckService.ApplyAiAsync(
+                userId, request.Questions, provider, request.Model, ct);
+            return Ok(new FactCheckDraftResponse(merged));
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Surfaces from the factory (no-key, disabled provider, model not
+            // in allowlist) — those are user-actionable, so 400.
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// BYO fact-check on a pre-save draft. User pasted the model's JSON
+    /// response into the request body; we parse and apply it.
+    /// </summary>
+    [HttpPost("fact-check-json")]
+    public IActionResult FactCheckDraftJson(
+        [FromBody] FactCheckDraftFromJsonRequest request)
+    {
+        if (!TryGetUserId(out _)) return Unauthorized();
+        try
+        {
+            var merged = factCheckService.ApplyJson(request.Questions, request.SourceJson);
+            return Ok(new FactCheckDraftResponse(merged));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// AI fact-check on a saved quiz. Persists flag changes in place,
+    /// returns the refreshed detail DTO.
+    /// </summary>
+    [HttpPost("{id:guid}/fact-check")]
+    public async Task<IActionResult> FactCheckSaved(
+        Guid                             id,
+        [FromBody] FactCheckSavedRequest request,
+        CancellationToken                ct)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        if (!AiProviderKind.TryFromName(request.Provider, out var provider))
+            return BadRequest(new { error = $"Unknown provider '{request.Provider}'." });
+
+        try
+        {
+            var updated = await factCheckService.ApplyAiToSavedAsync(
+                id, userId, provider, request.Model, ct);
+            return updated is null ? NotFound() : Ok(updated);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
+    }
+
+    /// <summary>BYO fact-check on a saved quiz.</summary>
+    [HttpPost("{id:guid}/fact-check-json")]
+    public async Task<IActionResult> FactCheckSavedJson(
+        Guid                                     id,
+        [FromBody] FactCheckSavedFromJsonRequest request,
+        CancellationToken                        ct)
+    {
+        if (!TryGetUserId(out var userId)) return Unauthorized();
+        try
+        {
+            var updated = await factCheckService.ApplyJsonToSavedAsync(
+                id, userId, request.SourceJson, ct);
+            return updated is null ? NotFound() : Ok(updated);
         }
         catch (InvalidOperationException ex)
         {
